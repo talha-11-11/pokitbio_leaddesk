@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
+import { extractAll } from './extract.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const {
@@ -73,6 +74,7 @@ CREATE TABLE IF NOT EXISTS followups (
 CREATE INDEX IF NOT EXISTS idx_msg_lead ON messages(lead_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_fu_lead ON followups(lead_id, due_at);
 CREATE INDEX IF NOT EXISTS idx_notes_lead ON notes(lead_id, created_at);
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS name_locked BOOLEAN NOT NULL DEFAULT false;
 `);
 
 // undo auto-"contacted" from the earlier version (only where you never changed it yourself)
@@ -138,12 +140,30 @@ async function upsertLead(platform, externalId, hint = {}) {
   return created;
 }
 
+/** Fill empty phone / business (and name, unless you edited it) from what the customer wrote. */
+async function enrichFromText(leadId, text) {
+  const found = extractAll(text);
+  if (!found.name && !found.phone && !found.business) return;
+  const lead = await one(`SELECT name, phone, business, name_locked FROM leads WHERE id=$1`, [leadId]);
+  if (!lead) return;
+  const set = {};
+  if (found.phone && !lead.phone) set.phone = found.phone;
+  if (found.business && !lead.business) set.business = found.business;
+  if (found.name && !lead.name_locked && found.name !== lead.name) set.name = found.name;
+  const keys = Object.keys(set);
+  if (!keys.length) return;
+  await pool.query(`UPDATE leads SET ${keys.map((k, i) => `${k}=$${i + 1}`).join(', ')}${set.name ? ', name_locked=true' : ''} WHERE id=$${keys.length + 1}`,
+    [...keys.map((k) => set[k]), leadId]);
+  await logActivity(leadId, 'Picked up from message: ' + keys.map((k) => `${k} "${set[k]}"`).join(', '));
+}
+
 async function saveMessage(leadId, { mid, direction, text, created_at }) {
   const ins = await one(
     `INSERT INTO messages (lead_id, mid, direction, text, created_at) VALUES ($1,$2,$3,$4,$5)
      ON CONFLICT (mid) DO NOTHING RETURNING id`,
     [leadId, mid || null, direction, text || '', created_at]);
   if (!ins) return false; // duplicate (Meta retries / re-sync)
+  if (direction === 'in') await enrichFromText(leadId, text).catch((e) => console.warn('extract failed', e.message));
   // only bump "last message" if this one is newest
   await pool.query(
     `UPDATE leads SET last_message=$1, last_message_at=$2, last_direction=$3, updated_at=now(),
@@ -280,7 +300,7 @@ app.patch('/api/leads/:id', wrap(async (req, res) => {
   const keys = EDITABLE.filter((k) => k in b);
   if (!keys.length) return res.json({ ok: true });
   const vals = keys.map((k) => (b[k] === '' ? null : b[k]));
-  await pool.query(`UPDATE leads SET ${keys.map((k, i) => `${k}=$${i + 1}`).join(', ')}, updated_at=now() WHERE id=$${keys.length + 1}`,
+  await pool.query(`UPDATE leads SET ${keys.map((k, i) => `${k}=$${i + 1}`).join(', ')}${'name' in b ? ', name_locked=true' : ''}, updated_at=now() WHERE id=$${keys.length + 1}`,
     [...vals, lead.id]);
   const changed = (k) => k in b && (b[k] ? new Date(b[k]).getTime() : null) !== (lead[k] ? new Date(lead[k]).getTime() : null);
   if (b.status && b.status !== lead.status) await logActivity(lead.id, `Status: ${STATUS_LABEL[lead.status]} → ${STATUS_LABEL[b.status]}`);
@@ -408,6 +428,17 @@ app.get('/api/export.csv', wrap(async (_req, res) => {
   res.type('text/csv').attachment('pokitbio-leads.csv')
     .send([cols.join(','), ...rows.map((r) => cols.map((c) => cell(r[c])).join(','))].join('\n'));
 }));
+
+// one-time pass over messages already stored (only fills empty fields)
+(async () => {
+  const leads = await all(`SELECT id FROM leads WHERE phone IS NULL OR business IS NULL OR name IS NULL`);
+  for (const l of leads) {
+    for (const m of await all(`SELECT text FROM messages WHERE lead_id=$1 AND direction='in' ORDER BY created_at`, [l.id])) {
+      await enrichFromText(l.id, m.text);
+    }
+  }
+  if (leads.length) console.log(`checked ${leads.length} leads for name/phone/business in old messages`);
+})().catch((e) => console.warn('backfill failed', e.message));
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use((err, _req, res, _next) => { console.error(err); res.status(500).json({ error: err.message }); });

@@ -56,6 +56,7 @@
   .avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--soft-main); color: var(--main); display: grid; place-items: center; font-weight: 700; flex: none; overflow: hidden; }
   .avatar img { width: 100%; height: 100%; object-fit: cover; }
   .name { font-weight: 600; white-space: nowrap; }
+  .who .sub { white-space: nowrap; max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
   .sub { color: var(--muted); font-size: 12px; }
   .snip { color: var(--muted); max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .badge { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 600; white-space: nowrap; }
@@ -194,7 +195,7 @@
     </div>
     <div class="card"><div style="overflow-x:auto"><table>
       <thead><tr>
-        <th>Lead</th><th>Phone</th><th>Business</th><th>Source</th><th>Status</th><th>Contacted</th><th>Demo sent</th><th>Next follow-up</th><th class="hide-sm">Last message</th>
+        <th>Lead</th><th>Source</th><th>Status</th><th>Contacted</th><th>Demo sent</th><th>Next follow-up</th><th class="hide-sm">Last message</th>
       </tr></thead>
       <tbody id="leadRows"></tbody>
     </table></div></div>
@@ -348,16 +349,16 @@ function renderLeads() {
   $('#leadRows').innerHTML = list.length ? list.map((l) => `
     <tr class="row" data-id="${l.id}">
       <td><div class="who">${avatar(l)}<div><div class="name">${displayName(l)}${l.unread ? `<span class="unread">${l.unread}</span>` : ''}</div>
-        <div class="sub">${esc(l.username ? '@' + l.username : fmtDate(l.created_at))}</div></div></div></td>
-      <td class="ed"><input class="cell" data-cell="phone" data-id="${l.id}" value="${esc(l.phone || '')}" placeholder="add phone" /></td>
-      <td class="ed"><input class="cell" data-cell="business" data-id="${l.id}" value="${esc(l.business || '')}" placeholder="add business" /></td>
+        ${l.phone ? `<div class="sub">📞 ${esc(l.phone)}</div>` : ''}
+        ${l.business ? `<div class="sub">🏢 ${esc(l.business)}</div>` : ''}
+        ${!l.phone && !l.business ? `<div class="sub">${esc(l.username ? '@' + l.username : 'No phone / business yet')}</div>` : ''}</div></div></td>
       <td><span class="plat ${l.platform}">${platLabel[l.platform] || l.platform}</span></td>
       <td class="ed"><select class="cell st s-${l.status}" data-cell="status" data-id="${l.id}">${CONFIG.statuses.map((s) => `<option value="${s.id}" ${s.id === l.status ? 'selected' : ''}>${s.label}</option>`).join('')}</select></td>
       <td class="ed"><label class="chk"><input type="checkbox" data-mark="contacted_at" data-id="${l.id}" ${l.contacted_at ? 'checked' : ''} /> <span class="sub">${l.contacted_at ? fmtDate(l.contacted_at) : 'No'}</span></label></td>
       <td class="ed"><label class="chk"><input type="checkbox" data-mark="demo_sent_at" data-id="${l.id}" ${l.demo_sent_at ? 'checked' : ''} /> <span class="sub">${l.demo_sent_at ? fmtDate(l.demo_sent_at) : 'No'}</span></label></td>
       <td>${l.next_followup_at ? `<span class="${fuClass(l.next_followup_at)}">${fmtDate(l.next_followup_at)}</span>${l.next_followup_note ? `<div class="sub snip">${esc(l.next_followup_note)}</div>` : ''}` : '<span class="no">—</span>'}</td>
       <td class="hide-sm"><div class="snip">${l.last_direction === 'out' ? 'You: ' : ''}${esc(l.last_message || '')}</div><div class="sub">${rel(l.last_message_at)}</div></td>
-    </tr>`).join('') : `<tr><td colspan="9" class="empty">No leads yet. Messages sent to your Facebook page or Instagram will appear here automatically.</td></tr>`;
+    </tr>`).join('') : `<tr><td colspan="7" class="empty">No leads yet. Messages sent to your Facebook page or Instagram will appear here automatically.</td></tr>`;
   $$('#leadRows tr.row').forEach((tr) => (tr.onclick = () => openLead(+tr.dataset.id)));
   $$('#leadRows td.ed').forEach((td) => (td.onclick = (e) => e.stopPropagation()));
   $$('#leadRows [data-cell]').forEach((el) => (el.onchange = async () => {
