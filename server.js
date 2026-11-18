@@ -75,6 +75,15 @@ CREATE INDEX IF NOT EXISTS idx_fu_lead ON followups(lead_id, due_at);
 CREATE INDEX IF NOT EXISTS idx_notes_lead ON notes(lead_id, created_at);
 `);
 
+// undo auto-"contacted" from the earlier version (only where you never changed it yourself)
+await pool.query(`
+  UPDATE leads SET contacted_at=NULL, status='new'
+  WHERE status='contacted'
+    AND id IN (SELECT lead_id FROM notes WHERE text='Marked contacted (first reply sent from page)')
+    AND id NOT IN (SELECT lead_id FROM notes WHERE kind='activity' AND (text LIKE 'Status:%' OR text LIKE 'Contacted on%'));
+  DELETE FROM notes WHERE text='Marked contacted (first reply sent from page)';
+`);
+
 const STATUSES = ['new', 'contacted', 'demo_sent', 'negotiation', 'won', 'lost'];
 const STATUS_LABEL = { new: 'New', contacted: 'Contacted', demo_sent: 'Demo sent', negotiation: 'Negotiation', won: 'Won', lost: 'Lost' };
 const isoDay = (v) => new Date(v).toLocaleDateString('en-CA', { timeZone: APP_TZ });
@@ -141,13 +150,7 @@ async function saveMessage(leadId, { mid, direction, text, created_at }) {
        unread = CASE WHEN $3='in' THEN unread+1 ELSE 0 END
      WHERE id=$4 AND (last_message_at IS NULL OR last_message_at <= $2)`,
     [(text || '[attachment]').slice(0, 300), created_at, direction, leadId]);
-  // first outgoing reply = contacted automatically
-  if (direction === 'out') {
-    const upd = await one(
-      `UPDATE leads SET contacted_at=$1, status=CASE WHEN status='new' THEN 'contacted' ELSE status END
-       WHERE id=$2 AND contacted_at IS NULL RETURNING id`, [created_at, leadId]);
-    if (upd) await logActivity(leadId, 'Marked contacted (first reply sent from page)');
-  }
+  // Contacted / demo are set manually from the dashboard — messages never change the stage.
   return true;
 }
 
@@ -331,7 +334,7 @@ app.get('/api/stats', wrap(async (_req, res) => {
       (SELECT COUNT(*)::int FROM leads) AS total,
       (SELECT COUNT(*)::int FROM leads WHERE created_at >= now() - interval '7 days') AS "newThisWeek",
       (SELECT COUNT(*)::int FROM leads WHERE demo_sent_at IS NOT NULL) AS "demosSent",
-      (SELECT COUNT(*)::int FROM leads WHERE last_direction='in' AND status NOT IN ('won','lost')) AS unreplied,
+      (SELECT COUNT(*)::int FROM leads WHERE contacted_at IS NULL AND status NOT IN ('won','lost')) AS "notContacted",
       (SELECT COUNT(DISTINCT lead_id)::int FROM followups WHERE done_at IS NULL AND ${localDay('due_at')} < ${today}) AS overdue,
       (SELECT COUNT(DISTINCT lead_id)::int FROM followups WHERE done_at IS NULL AND ${localDay('due_at')} = ${today}) AS "dueToday"`);
   const byStatus = Object.fromEntries(STATUSES.map((st) => [st, 0]));

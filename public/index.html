@@ -55,7 +55,7 @@
   .who { display: flex; align-items: center; gap: 10px; }
   .avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--soft-main); color: var(--main); display: grid; place-items: center; font-weight: 700; flex: none; overflow: hidden; }
   .avatar img { width: 100%; height: 100%; object-fit: cover; }
-  .name { font-weight: 600; }
+  .name { font-weight: 600; white-space: nowrap; }
   .sub { color: var(--muted); font-size: 12px; }
   .snip { color: var(--muted); max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .badge { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 600; white-space: nowrap; }
@@ -74,6 +74,12 @@
   .no { color: #b4bccb; }
   .over { color: var(--main); font-weight: 700; }
   .today { color: #9a5b00; font-weight: 700; }
+  input.cell { border: 1px solid transparent; background: transparent; border-radius: 6px; padding: 5px 7px; width: 140px; color: var(--ink); }
+  input.cell:hover, input.cell:focus { border-color: var(--line); background: var(--white); outline: none; }
+  input.cell::placeholder { color: #c3cad6; }
+  select.cell.st { border: 0; border-radius: 99px; padding: 3px 8px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .chk { display: flex; align-items: center; gap: 6px; white-space: nowrap; cursor: pointer; }
+  .chk input { width: 16px; height: 16px; accent-color: var(--sec); cursor: pointer; }
   .empty { padding: 40px; text-align: center; color: var(--muted); }
 
   /* pipeline */
@@ -180,7 +186,7 @@
       </select>
       <select id="fQuick">
         <option value="">Any</option>
-        <option value="unreplied">Waiting for reply</option>
+        <option value="notcontacted">Not contacted yet</option>
         <option value="nodemo">Contacted, no demo yet</option>
         <option value="overdue">Follow-up overdue</option>
       </select>
@@ -188,7 +194,7 @@
     </div>
     <div class="card"><div style="overflow-x:auto"><table>
       <thead><tr>
-        <th>Lead</th><th>Source</th><th>Status</th><th>Contacted</th><th>Demo</th><th>Next follow-up</th><th class="hide-sm">Last message</th>
+        <th>Lead</th><th>Phone</th><th>Business</th><th>Source</th><th>Status</th><th>Contacted</th><th>Demo sent</th><th>Next follow-up</th><th class="hide-sm">Last message</th>
       </tr></thead>
       <tbody id="leadRows"></tbody>
     </table></div></div>
@@ -309,7 +315,7 @@ async function loadStats() {
   const tiles = [
     ['Total leads', s.total, () => resetFilters()],
     ['New this week', s.newThisWeek, () => resetFilters()],
-    ['Waiting for reply', s.unreplied, () => setQuick('unreplied'), s.unreplied > 0],
+    ['Not contacted yet', s.notContacted, () => setQuick('notcontacted'), s.notContacted > 0],
     ['Demos sent', s.demosSent, () => { resetFilters(); $('#fStatus').value = 'demo_sent'; loadLeads(); }],
     ['Follow-ups today', s.dueToday, () => switchView('followups')],
     ['Overdue follow-ups', s.overdue, () => setQuick('overdue'), s.overdue > 0],
@@ -332,7 +338,7 @@ async function loadLeads() {
 }
 function quickFilter(list) {
   const qf = $('#fQuick').value, t = todayStr();
-  if (qf === 'unreplied') return list.filter((l) => l.last_direction === 'in' && !['won', 'lost'].includes(l.status));
+  if (qf === 'notcontacted') return list.filter((l) => !l.contacted_at && !['won', 'lost'].includes(l.status));
   if (qf === 'nodemo') return list.filter((l) => l.contacted_at && !l.demo_sent_at && !['won', 'lost'].includes(l.status));
   if (qf === 'overdue') return list.filter((l) => l.next_followup_at && dayOf(l.next_followup_at) < t);
   return list;
@@ -342,15 +348,26 @@ function renderLeads() {
   $('#leadRows').innerHTML = list.length ? list.map((l) => `
     <tr class="row" data-id="${l.id}">
       <td><div class="who">${avatar(l)}<div><div class="name">${displayName(l)}${l.unread ? `<span class="unread">${l.unread}</span>` : ''}</div>
-        <div class="sub">${esc([l.business, l.phone].filter(Boolean).join(' · ') || (l.username ? '@' + l.username : ''))}</div></div></div></td>
+        <div class="sub">${esc(l.username ? '@' + l.username : fmtDate(l.created_at))}</div></div></div></td>
+      <td class="ed"><input class="cell" data-cell="phone" data-id="${l.id}" value="${esc(l.phone || '')}" placeholder="add phone" /></td>
+      <td class="ed"><input class="cell" data-cell="business" data-id="${l.id}" value="${esc(l.business || '')}" placeholder="add business" /></td>
       <td><span class="plat ${l.platform}">${platLabel[l.platform] || l.platform}</span></td>
-      <td>${badge(l.status)}</td>
-      <td>${l.contacted_at ? `<span class="yes">✓</span> <span class="sub">${fmtDate(l.contacted_at)}</span>` : '<span class="no">—</span>'}</td>
-      <td>${l.demo_sent_at ? `<span class="yes">✓</span> <span class="sub">${fmtDate(l.demo_sent_at)}</span>` : '<span class="no">—</span>'}</td>
+      <td class="ed"><select class="cell st s-${l.status}" data-cell="status" data-id="${l.id}">${CONFIG.statuses.map((s) => `<option value="${s.id}" ${s.id === l.status ? 'selected' : ''}>${s.label}</option>`).join('')}</select></td>
+      <td class="ed"><label class="chk"><input type="checkbox" data-mark="contacted_at" data-id="${l.id}" ${l.contacted_at ? 'checked' : ''} /> <span class="sub">${l.contacted_at ? fmtDate(l.contacted_at) : 'No'}</span></label></td>
+      <td class="ed"><label class="chk"><input type="checkbox" data-mark="demo_sent_at" data-id="${l.id}" ${l.demo_sent_at ? 'checked' : ''} /> <span class="sub">${l.demo_sent_at ? fmtDate(l.demo_sent_at) : 'No'}</span></label></td>
       <td>${l.next_followup_at ? `<span class="${fuClass(l.next_followup_at)}">${fmtDate(l.next_followup_at)}</span>${l.next_followup_note ? `<div class="sub snip">${esc(l.next_followup_note)}</div>` : ''}` : '<span class="no">—</span>'}</td>
       <td class="hide-sm"><div class="snip">${l.last_direction === 'out' ? 'You: ' : ''}${esc(l.last_message || '')}</div><div class="sub">${rel(l.last_message_at)}</div></td>
-    </tr>`).join('') : `<tr><td colspan="7" class="empty">No leads yet. Messages sent to your Facebook page or Instagram will appear here automatically.</td></tr>`;
+    </tr>`).join('') : `<tr><td colspan="9" class="empty">No leads yet. Messages sent to your Facebook page or Instagram will appear here automatically.</td></tr>`;
   $$('#leadRows tr.row').forEach((tr) => (tr.onclick = () => openLead(+tr.dataset.id)));
+  $$('#leadRows td.ed').forEach((td) => (td.onclick = (e) => e.stopPropagation()));
+  $$('#leadRows [data-cell]').forEach((el) => (el.onchange = async () => {
+    await api('/api/leads/' + el.dataset.id, { method: 'PATCH', body: { [el.dataset.cell]: el.value.trim() } });
+    toast('Saved'); refresh(true);
+  }));
+  $$('#leadRows [data-mark]').forEach((cb) => (cb.onchange = async () => {
+    await api('/api/leads/' + cb.dataset.id, { method: 'PATCH', body: { [cb.dataset.mark]: cb.checked ? new Date().toISOString() : null } });
+    toast(cb.checked ? (cb.dataset.mark === 'contacted_at' ? 'Marked contacted' : 'Marked demo sent') : 'Cleared'); refresh(true);
+  }));
 }
 
 // ---- pipeline ----
@@ -477,7 +494,7 @@ async function openLead(id) {
   const patch = async (body, msg) => { await api('/api/leads/' + id, { method: 'PATCH', body }); if (msg) toast(msg); await refresh(true); openLead(id); };
   $('#closeD').onclick = closeLead;
   $$('[data-status]', d).forEach((b) => (b.onclick = () => patch({ status: b.dataset.status }, 'Stage: ' + statusLabel(b.dataset.status))));
-  $$('[data-today]', d).forEach((b) => (b.onclick = () => patch({ [b.dataset.today]: new Date().toISOString(), ...(b.dataset.today === 'demo_sent_at' && ['new', 'contacted'].includes(l.status) ? { status: 'demo_sent' } : {}), ...(b.dataset.today === 'contacted_at' && l.status === 'new' ? { status: 'contacted' } : {}) }, 'Saved')));
+  $$('[data-today]', d).forEach((b) => (b.onclick = () => patch({ [b.dataset.today]: new Date().toISOString() }, 'Saved')));
   $$('[data-clear]', d).forEach((b) => (b.onclick = () => patch({ [b.dataset.clear]: null }, 'Cleared')));
   $$('[data-ms]', d).forEach((inp) => (inp.onchange = () => patch({ [inp.dataset.ms]: dateToIso(inp.value) }, 'Date saved')));
   $$('[data-field]', d).forEach((inp) => (inp.onchange = () => patch({ [inp.dataset.field]: inp.value.trim() }, 'Saved')));
