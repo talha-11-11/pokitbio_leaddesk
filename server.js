@@ -16,6 +16,7 @@ const {
   META_PAGE_TOKEN = '',
   META_PAGE_ID = '',
   META_IG_ID = '',
+  META_IG_TOKEN = '', // optional: system-user token from the Instagram "Unified login" setup
   GRAPH_VERSION = 'v21.0',
 } = process.env;
 const GRAPH = `https://graph.facebook.com/${GRAPH_VERSION}`;
@@ -82,11 +83,12 @@ const logActivity = (leadId, text) =>
   pool.query(`INSERT INTO notes (lead_id, kind, text) VALUES ($1, 'activity', $2)`, [leadId, text]);
 
 // ---------------------------------------------------------------- Meta helpers
-async function graph(pathAndQuery) {
-  if (!META_PAGE_TOKEN) throw new Error('META_PAGE_TOKEN not set');
+const IG_TOKEN = META_IG_TOKEN || META_PAGE_TOKEN;
+async function graph(pathAndQuery, token = META_PAGE_TOKEN) {
+  if (!token) throw new Error('No Meta access token set');
   const url = pathAndQuery.startsWith('http')
     ? pathAndQuery
-    : `${GRAPH}/${pathAndQuery}${pathAndQuery.includes('?') ? '&' : '?'}access_token=${META_PAGE_TOKEN}`;
+    : `${GRAPH}/${pathAndQuery}${pathAndQuery.includes('?') ? '&' : '?'}access_token=${token}`;
   const j = await (await fetch(url)).json();
   if (j.error) throw new Error(j.error.message);
   return j;
@@ -98,7 +100,7 @@ async function fetchProfile(platform, id) {
       const p = await graph(`${id}?fields=first_name,last_name,profile_pic`);
       return { name: [p.first_name, p.last_name].filter(Boolean).join(' '), profile_pic: p.profile_pic };
     }
-    const p = await graph(`${id}?fields=name,username,profile_pic`);
+    const p = await graph(`${id}?fields=name,username,profile_pic`, IG_TOKEN);
     return { name: p.name || p.username, username: p.username, profile_pic: p.profile_pic };
   } catch (e) {
     console.warn(`profile lookup failed (${platform} ${id}):`, e.message);
@@ -219,7 +221,7 @@ const leadSelect = `
 
 app.get('/api/config', (_req, res) => res.json({
   statuses: STATUSES.map((s) => ({ id: s, label: STATUS_LABEL[s] })),
-  meta: { pageConnected: !!(META_PAGE_TOKEN && META_PAGE_ID), igConnected: !!(META_PAGE_TOKEN && META_IG_ID) },
+  meta: { pageConnected: !!(META_PAGE_TOKEN && META_PAGE_ID), igConnected: !!(IG_TOKEN && META_IG_ID) },
 }));
 
 app.get('/api/leads', wrap(async (req, res) => {
@@ -344,16 +346,32 @@ app.get('/api/followups', wrap(async (_req, res) => {
 }));
 
 // --- backfill old conversations from Meta ---
+const CONV_FIELDS = 'participants,updated_time,messages.limit(25){id,message,from,created_time}';
+
 async function syncPlatform(platform) {
   const ownId = platform === 'instagram' ? META_IG_ID : META_PAGE_ID;
   if (!ownId) return { platform, skipped: 'id not set' };
-  let url = `${META_PAGE_ID || 'me'}/conversations?platform=${platform}&limit=25&fields=participants,updated_time,messages.limit(25){id,message,from,created_time}`;
-  let leads = 0, msgs = 0, pages = 0;
+  // Instagram: try the IG account's own conversations (unified login token), then the page's.
+  const sources = platform === 'instagram'
+    ? [[`${META_IG_ID}/conversations?platform=instagram&limit=25&fields=${CONV_FIELDS}`, IG_TOKEN],
+       [`${META_PAGE_ID}/conversations?platform=instagram&limit=25&fields=${CONV_FIELDS}`, META_PAGE_TOKEN]]
+    : [[`${META_PAGE_ID}/conversations?platform=messenger&limit=25&fields=${CONV_FIELDS}`, META_PAGE_TOKEN]];
+  let lastErr;
+  for (const [start, token] of sources) {
+    if (!token) continue;
+    try { return await syncFrom(platform, ownId, start, token); } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error('no token');
+}
+
+async function syncFrom(platform, ownId, start, token) {
+  let url = start, leads = 0, msgs = 0, pages = 0;
+  const isOwn = (id) => [String(ownId), String(META_PAGE_ID), String(META_IG_ID)].includes(String(id));
   while (url && pages < 20) {
-    const data = await graph(url);
+    const data = await graph(url, token);
     pages++;
     for (const conv of data.data || []) {
-      const other = (conv.participants?.data || []).find((p) => String(p.id) !== String(ownId) && String(p.id) !== String(META_PAGE_ID));
+      const other = (conv.participants?.data || []).find((p) => !isOwn(p.id));
       if (!other) continue;
       const before = await one(`SELECT id FROM leads WHERE platform=$1 AND external_id=$2`, [platform, String(other.id)]);
       const oldest = conv.messages?.data?.at(-1)?.created_time;
@@ -363,7 +381,7 @@ async function syncPlatform(platform) {
       });
       if (!before) leads++;
       for (const m of [...(conv.messages?.data || [])].reverse()) {
-        const out = String(m.from?.id) === String(ownId) || String(m.from?.id) === String(META_PAGE_ID);
+        const out = isOwn(m.from?.id);
         if (await saveMessage(lead.id, { mid: m.id, direction: out ? 'out' : 'in', text: m.message, created_at: new Date(m.created_time).toISOString() })) msgs++;
       }
     }
