@@ -2,7 +2,7 @@
 // All amounts are stored in their original currency AND converted to PKR at the rate on that day.
 
 export const EXPENSE_CATEGORIES = [
-  'Meta Ads', 'Marketing', 'Salaries', 'Software & AI tools', 'Hosting & Domains', 'Email',
+  'Meta Ads', 'Marketing', 'Upwork', 'Salaries', 'Software & AI tools', 'Hosting & Domains', 'Email',
   'Office & Utilities', 'Equipment', 'Travel', 'Commission', 'Taxes & Fees', 'Other',
 ];
 export const CURRENCIES = ['PKR', 'USD', 'EUR', 'GBP', 'AUD', 'AED'];
@@ -145,14 +145,15 @@ export async function setupFinance(app, pool, { APP_TZ = 'Asia/Karachi' } = {}) 
       ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY e.date DESC, e.id DESC LIMIT 2000`, args);
     res.json(fixDates(rows));
   }));
-  const EXP_FIELDS = ['date', 'category', 'vendor', 'description', 'method'];
+  const EXP_FIELDS = ['date', 'category', 'subcategory', 'vendor', 'description', 'method', 'project_id', 'qty'];
   app.post('/api/expenses', wrap(async (req, res) => {
     const b = req.body || {};
     if (!b.category) return res.status(400).json({ error: 'category required' });
     const m = await money(b);
-    const r = await one(`INSERT INTO expenses (date, category, vendor, description, method, amount, currency, rate, amount_pkr)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-      [b.date || todayLocal(), b.category, b.vendor || null, b.description || null, b.method || null, m.amount, m.currency, m.rate, m.amount_pkr]);
+    const r = await one(`INSERT INTO expenses (date, category, vendor, description, method, amount, currency, rate, amount_pkr, subcategory, project_id, qty)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
+      [b.date || todayLocal(), b.category, b.vendor || null, b.description || null, b.method || null, m.amount, m.currency, m.rate, m.amount_pkr,
+       b.subcategory || null, num(b.project_id), b.qty ? parseInt(b.qty, 10) : null]);
     res.json(r);
   }));
   app.patch('/api/expenses/:id', wrap(async (req, res) => {
@@ -162,7 +163,7 @@ export async function setupFinance(app, pool, { APP_TZ = 'Asia/Karachi' } = {}) 
     const m = await money({ amount: b.amount ?? cur.amount, currency: b.currency ?? cur.currency, rate: b.rate ?? (b.currency && b.currency !== cur.currency ? null : cur.rate) });
     const keys = EXP_FIELDS.filter((k) => k in b);
     await pool.query(`UPDATE expenses SET ${[...keys.map((k, i) => `${k}=$${i + 1}`), `amount=$${keys.length + 1}`, `currency=$${keys.length + 2}`, `rate=$${keys.length + 3}`, `amount_pkr=$${keys.length + 4}`].join(',')} WHERE id=$${keys.length + 5}`,
-      [...keys.map((k) => (b[k] === '' ? null : b[k])), m.amount, m.currency, m.rate, m.amount_pkr, cur.id]);
+      [...keys.map((k) => (k === 'project_id' || k === 'qty' ? num(b[k]) : b[k] === '' ? null : b[k])), m.amount, m.currency, m.rate, m.amount_pkr, cur.id]);
     res.json({ ok: true });
   }));
   app.delete('/api/expenses/:id', wrap(async (req, res) => { await pool.query(`DELETE FROM expenses WHERE id=$1`, [+req.params.id]); res.json({ ok: true }); }));
@@ -224,16 +225,16 @@ export async function setupFinance(app, pool, { APP_TZ = 'Asia/Karachi' } = {}) 
       ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY i.date DESC, i.id DESC LIMIT 2000`, args);
     res.json(fixDates(rows));
   }));
-  const INC_FIELDS = ['date', 'client', 'project', 'description', 'method', 'status', 'source', 'lead_id', 'from_meta'];
+  const INC_FIELDS = ['date', 'client', 'project', 'description', 'method', 'status', 'source', 'lead_id', 'from_meta', 'project_id'];
   const bool = (v) => v === true || v === 'true' || v === 'on' || v === 1 || v === '1';
   app.post('/api/income', wrap(async (req, res) => {
     const b = req.body || {};
     if (!b.client) return res.status(400).json({ error: 'client required' });
     const m = await money(b);
-    const r = await one(`INSERT INTO income (date, client, project, description, method, status, source, lead_id, amount, currency, rate, amount_pkr, from_meta)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`,
+    const r = await one(`INSERT INTO income (date, client, project, description, method, status, source, lead_id, amount, currency, rate, amount_pkr, from_meta, project_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
       [b.date || todayLocal(), b.client, b.project || null, b.description || null, b.method || null, b.status === 'pending' ? 'pending' : 'received',
-       b.source || null, num(b.lead_id), m.amount, m.currency, m.rate, m.amount_pkr, bool(b.from_meta)]);
+       b.source || null, num(b.lead_id), m.amount, m.currency, m.rate, m.amount_pkr, bool(b.from_meta), num(b.project_id)]);
     res.json(r);
   }));
   app.patch('/api/income/:id', wrap(async (req, res) => {
@@ -243,7 +244,7 @@ export async function setupFinance(app, pool, { APP_TZ = 'Asia/Karachi' } = {}) 
     const m = await money({ amount: b.amount ?? cur.amount, currency: b.currency ?? cur.currency, rate: b.rate ?? (b.currency && b.currency !== cur.currency ? null : cur.rate) });
     const keys = INC_FIELDS.filter((k) => k in b);
     await pool.query(`UPDATE income SET ${[...keys.map((k, i) => `${k}=$${i + 1}`), `amount=$${keys.length + 1}`, `currency=$${keys.length + 2}`, `rate=$${keys.length + 3}`, `amount_pkr=$${keys.length + 4}`].join(',')} WHERE id=$${keys.length + 5}`,
-      [...keys.map((k) => (k === 'lead_id' ? num(b[k]) : k === 'from_meta' ? bool(b[k]) : b[k] === '' ? null : b[k])), m.amount, m.currency, m.rate, m.amount_pkr, cur.id]);
+      [...keys.map((k) => (k === 'lead_id' || k === 'project_id' ? num(b[k]) : k === 'from_meta' ? bool(b[k]) : b[k] === '' ? null : b[k])), m.amount, m.currency, m.rate, m.amount_pkr, cur.id]);
     res.json({ ok: true });
   }));
   app.delete('/api/income/:id', wrap(async (req, res) => { await pool.query(`DELETE FROM income WHERE id=$1`, [+req.params.id]); res.json({ ok: true }); }));

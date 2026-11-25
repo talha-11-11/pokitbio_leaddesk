@@ -1,0 +1,944 @@
+{
+ "source": "Upwork account of Mian Talha Sarfraz, read through Claude's Upwork connector",
+ "fetched_at": "2026-11-25T21:08:10Z",
+ "connects_balance": 3,
+ "available_balance_usd": 0.0,
+ "contracts": [
+  {
+   "id": "44456284",
+   "title": "AI Engineer for Daily Widget Development",
+   "client": "501K",
+   "status": "ACTIVE",
+   "start": "2026-09-08",
+   "end": null,
+   "type": "hourly",
+   "rate": 5
+  },
+  {
+   "id": "43716524",
+   "title": "AI Automation Expert (ASSESS)",
+   "client": "elunic AG",
+   "status": "CLOSED",
+   "start": "2026-05-22",
+   "end": "2026-06-13",
+   "type": "hourly",
+   "rate": 10
+  },
+  {
+   "id": "42730408",
+   "title": "Subject Matter Experts (SMEs) Required - Data / Analytics / GenAI / DevOps / AI PMs",
+   "client": "ConsultBae India Pvt Ltd",
+   "status": "CLOSED",
+   "start": "2026-01-23",
+   "end": "2026-07-15",
+   "type": null,
+   "rate": null
+  },
+  {
+   "id": "42466533",
+   "title": "Data Science Analyst for Sports Play-by-Play Project",
+   "client": "Crown Investment Group",
+   "status": "CLOSED",
+   "start": "2025-12-18",
+   "end": "2025-12-31",
+   "type": "fixed",
+   "rate": null
+  },
+  {
+   "id": "42462830",
+   "title": "AI Agents Development Mentor Needed for Fast-Track Training",
+   "client": "Saurabh Sahu",
+   "status": "CLOSED",
+   "start": "2025-12-18",
+   "end": "2026-01-08",
+   "type": "fixed",
+   "rate": null
+  },
+  {
+   "id": "42416372",
+   "title": "Chat GPT and AI expert to teach our Australian team via Zoom",
+   "client": "stralia sports.com",
+   "status": "CLOSED",
+   "start": "2025-12-12",
+   "end": "2025-12-13",
+   "type": "fixed",
+   "rate": null
+  },
+  {
+   "id": "42392504",
+   "title": "Global AI Services Engineers Needed",
+   "client": "Harlem Park Partners",
+   "status": "CLOSED",
+   "start": "2025-12-10",
+   "end": "2025-12-27",
+   "type": "hourly",
+   "rate": 20
+  },
+  {
+   "id": "42153233",
+   "title": "Deep Learning Model Troubleshooting for Brain Tumor Segmentation",
+   "client": "Uche Anakwenze",
+   "status": "CLOSED",
+   "start": "2025-11-12",
+   "end": "2025-11-12",
+   "type": null,
+   "rate": null
+  },
+  {
+   "id": "41612643",
+   "title": "Record Azure Machine Learning Course for Online Academy",
+   "client": "DIT Media",
+   "status": "CLOSED",
+   "start": "2025-09-10",
+   "end": "2025-09-10",
+   "type": "fixed",
+   "rate": null
+  },
+  {
+   "id": "40146994",
+   "title": "Machine learning job",
+   "client": "Gliterin",
+   "status": "CLOSED",
+   "start": "2025-03-26",
+   "end": "2025-03-26",
+   "type": "fixed",
+   "rate": null
+  },
+  {
+   "id": "40137895",
+   "title": "Master Thesis Topic and Methodology Development",
+   "client": "Gliterin",
+   "status": "CLOSED",
+   "start": "2025-03-25",
+   "end": "2025-03-26",
+   "type": null,
+   "rate": null
+  }
+ ],
+ "income": [
+  {
+   "ref": "953375979",
+   "date": "2026-09-20",
+   "contract": "44456284",
+   "amount": 200.0,
+   "description": "40:00 hrs @ $5.00/hr, 14–20 Sep 2026"
+  },
+  {
+   "ref": "951650118",
+   "date": "2026-09-13",
+   "contract": "44456284",
+   "amount": 190.0,
+   "description": "38:00 hrs @ $5.00/hr, 7–13 Sep 2026"
+  },
+  {
+   "ref": "925973818",
+   "date": "2026-06-07",
+   "contract": "43716524",
+   "amount": 1.67,
+   "description": "0:10 hrs @ $10.00/hr, 1–7 Jun 2026"
+  },
+  {
+   "ref": "924044241",
+   "date": "2026-05-31",
+   "contract": "43716524",
+   "amount": 3.33,
+   "description": "0:20 hrs @ $10.00/hr, 25–31 May 2026"
+  },
+  {
+   "ref": "881158623",
+   "date": "2026-01-08",
+   "contract": "42462830",
+   "amount": 84.0,
+   "description": "Milestone 1"
+  },
+  {
+   "ref": "879225849",
+   "date": "2025-12-31",
+   "contract": "42466533",
+   "amount": 100.0,
+   "description": "Milestone 1"
+  },
+  {
+   "ref": "874829715",
+   "date": "2025-12-14",
+   "contract": "42392504",
+   "amount": 20.0,
+   "description": "1:00 hrs @ $20.00/hr, 8–14 Dec 2025"
+  },
+  {
+   "ref": "873631622",
+   "date": "2025-12-12",
+   "contract": "42416372",
+   "amount": 5.0,
+   "description": "Milestone 1"
+  },
+  {
+   "ref": "844992072",
+   "date": "2025-09-10",
+   "contract": "41612643",
+   "amount": 5.0,
+   "description": "Milestone 1"
+  },
+  {
+   "ref": "792990110",
+   "date": "2025-03-26",
+   "contract": "40146994",
+   "amount": 30.0,
+   "description": "Milestone 1"
+  }
+ ],
+ "fees": [
+  {
+   "ref": "953375990",
+   "date": "2026-09-20",
+   "type": "Service fee",
+   "amount": 20.0,
+   "contract": "44456284",
+   "description": "10% of $200.00"
+  },
+  {
+   "ref": "951650133",
+   "date": "2026-09-13",
+   "type": "Service fee",
+   "amount": 19.0,
+   "contract": "44456284",
+   "description": "10% of $190.00"
+  },
+  {
+   "ref": "925973841",
+   "date": "2026-06-07",
+   "type": "Service fee",
+   "amount": 0.17,
+   "contract": "43716524",
+   "description": "10% of $1.67"
+  },
+  {
+   "ref": "924044256",
+   "date": "2026-05-31",
+   "type": "Service fee",
+   "amount": 0.33,
+   "contract": "43716524",
+   "description": "10% of $3.33"
+  },
+  {
+   "ref": "881158624",
+   "date": "2026-01-08",
+   "type": "Service fee",
+   "amount": 8.4,
+   "contract": "42462830",
+   "description": "10% of $84.00"
+  },
+  {
+   "ref": "879225850",
+   "date": "2025-12-31",
+   "type": "Service fee",
+   "amount": 10.0,
+   "contract": "42466533",
+   "description": "10% of $100.00"
+  },
+  {
+   "ref": "874829735",
+   "date": "2025-12-14",
+   "type": "Service fee",
+   "amount": 2.0,
+   "contract": "42392504",
+   "description": "10% of $20.00"
+  },
+  {
+   "ref": "873631623",
+   "date": "2025-12-12",
+   "type": "Service fee",
+   "amount": 0.5,
+   "contract": "42416372",
+   "description": "10% of $5.00"
+  },
+  {
+   "ref": "844992073",
+   "date": "2025-09-10",
+   "type": "Service fee",
+   "amount": 0.5,
+   "contract": "41612643",
+   "description": "10% of $5.00"
+  },
+  {
+   "ref": "792990111",
+   "date": "2025-03-26",
+   "type": "Service fee",
+   "amount": 3.0,
+   "contract": "40146994",
+   "description": "10% of $30.00"
+  },
+  {
+   "ref": "955547990",
+   "date": "2026-09-30",
+   "type": "Withdrawal fee",
+   "amount": 2.0,
+   "contract": null,
+   "description": "Payoneer withdrawal ($178.00)"
+  },
+  {
+   "ref": "953820117",
+   "date": "2026-09-23",
+   "type": "Withdrawal fee",
+   "amount": 2.0,
+   "contract": null,
+   "description": "Payoneer withdrawal ($166.50)"
+  },
+  {
+   "ref": "953788297",
+   "date": "2026-09-23",
+   "type": "Withdrawal fee",
+   "amount": 2.0,
+   "contract": null,
+   "description": "Payoneer withdrawal ($5.00)"
+  },
+  {
+   "ref": "882838986",
+   "date": "2026-01-13",
+   "type": "Withdrawal fee",
+   "amount": 0.99,
+   "contract": null,
+   "description": "Bank withdrawal ($74.61)"
+  },
+  {
+   "ref": "879797761",
+   "date": "2026-01-05",
+   "type": "Withdrawal fee",
+   "amount": 0.99,
+   "contract": null,
+   "description": "Bank withdrawal ($89.01)"
+  },
+  {
+   "ref": "877790917",
+   "date": "2025-12-27",
+   "type": "Withdrawal fee",
+   "amount": 0.99,
+   "contract": null,
+   "description": "Bank withdrawal ($17.01)"
+  },
+  {
+   "ref": "877319829",
+   "date": "2025-12-23",
+   "type": "Withdrawal fee",
+   "amount": 0.99,
+   "contract": null,
+   "description": "Bank withdrawal ($8.01)"
+  },
+  {
+   "ref": "812402392",
+   "date": "2025-05-28",
+   "type": "Withdrawal fee",
+   "amount": 0.99,
+   "contract": null,
+   "description": "Bank withdrawal ($26.01)"
+  }
+ ],
+ "connects_purchases": [
+  {
+   "ref": "959540414",
+   "date": "2026-10-17",
+   "qty": 600,
+   "amount": 90.0
+  },
+  {
+   "ref": "953649774",
+   "date": "2026-09-22",
+   "qty": 300,
+   "amount": 45.0
+  },
+  {
+   "ref": "947271183",
+   "date": "2026-08-30",
+   "qty": 300,
+   "amount": 45.0
+  },
+  {
+   "ref": "917448570",
+   "date": "2026-05-11",
+   "qty": 250,
+   "amount": 37.5
+  },
+  {
+   "ref": "866895354",
+   "date": "2025-11-19",
+   "qty": 150,
+   "amount": 22.5
+  },
+  {
+   "ref": "860514479",
+   "date": "2025-10-30",
+   "qty": 300,
+   "amount": 45.0
+  },
+  {
+   "ref": "849585264",
+   "date": "2025-09-25",
+   "qty": 100,
+   "amount": 15.0
+  },
+  {
+   "ref": "846989610",
+   "date": "2025-09-16",
+   "qty": 100,
+   "amount": 15.0
+  },
+  {
+   "ref": "758912740",
+   "date": "2024-12-04",
+   "qty": 300,
+   "amount": 45.0
+  }
+ ],
+ "proposals": [
+  {
+   "id": "2117580268516847617",
+   "date": "2026-11-03",
+   "title": "Im looking AI business coach/tutoring",
+   "url": "https://www.upwork.com/jobs/~022117574439586251249",
+   "bid": 14,
+   "boosted": true,
+   "connects_bid": 8,
+   "status": "Accepted",
+   "viewed": true
+  },
+  {
+   "id": "2115744795124379649",
+   "date": "2026-10-29",
+   "title": "Senior Full Stack Developer Audit",
+   "url": "https://www.upwork.com/jobs/~022115735540321472128",
+   "bid": 80,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Accepted",
+   "viewed": false
+  },
+  {
+   "id": "2114943552070144001",
+   "date": "2026-10-27",
+   "title": "Senior AI/LLM Systems Architect | 90-Min Paid Technical Consultation",
+   "url": "https://www.upwork.com/jobs/~022114892926077116253",
+   "bid": 35,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Accepted",
+   "viewed": false
+  },
+  {
+   "id": "2114756485128437761",
+   "date": "2026-10-26",
+   "title": "Senior AI Automation & Systems Architect — Make, Airtable, ClickUp, APIs",
+   "url": "https://www.upwork.com/jobs/~022114752359636532933",
+   "bid": 35,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Accepted",
+   "viewed": false
+  },
+  {
+   "id": "2114620263206797313",
+   "date": "2026-10-26",
+   "title": "AI Implementation for Business Processes",
+   "url": "https://www.upwork.com/jobs/~022114578876785014904",
+   "bid": 50,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Accepted",
+   "viewed": false
+  },
+  {
+   "id": "2114611750647832577",
+   "date": "2026-10-26",
+   "title": "Senior Full-Stack Agency Needed for AI-Powered Mobile + Web SaaS Platform",
+   "url": "https://www.upwork.com/jobs/~022114574647585553401",
+   "bid": 30,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Accepted",
+   "viewed": false
+  },
+  {
+   "id": "2114078482817482753",
+   "date": "2026-10-24",
+   "title": "SMS optimization with AI live transfer",
+   "url": "https://www.upwork.com/jobs/~022113946339952272491",
+   "bid": 700,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Accepted",
+   "viewed": false
+  },
+  {
+   "id": "2114047465858035713",
+   "date": "2026-10-24",
+   "title": "AI Agent Developer for Technical Products",
+   "url": "https://www.upwork.com/jobs/~022114033362478060434",
+   "bid": 35,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Accepted",
+   "viewed": false
+  },
+  {
+   "id": "2114031355188514817",
+   "date": "2026-10-24",
+   "title": "AI Automation Developer | AI/LLM Agent & Workflow Automation Design",
+   "url": "https://www.upwork.com/jobs/~022113624802954838839",
+   "bid": 30,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Accepted",
+   "viewed": false
+  },
+  {
+   "id": "2114014576239124481",
+   "date": "2026-10-24",
+   "title": "Senior Software Engineer for AI Fintech",
+   "url": "https://www.upwork.com/jobs/~022114011296436994346",
+   "bid": 15,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Accepted",
+   "viewed": false
+  },
+  {
+   "id": "2113973562178203649",
+   "date": "2026-10-24",
+   "title": "AI Strategy Consultant for a Luxury Wellness Business (Content and Client Engagement)",
+   "url": "https://www.upwork.com/jobs/~022113970867080004407",
+   "bid": 35,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Accepted",
+   "viewed": false
+  },
+  {
+   "id": "2112923942827872257",
+   "date": "2026-10-21",
+   "title": "Teach Coding with AI Tools & Teach to build AI Agent",
+   "url": "https://www.upwork.com/jobs/~022112913151360963382",
+   "bid": 15,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Accepted",
+   "viewed": true
+  },
+  {
+   "id": "2112094373835333633",
+   "date": "2026-10-19",
+   "title": "Automate Agency Reporting with ChatGPT",
+   "url": "https://www.upwork.com/jobs/~022112086521895679566",
+   "bid": 500,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Accepted",
+   "viewed": false
+  },
+  {
+   "id": "2112093195425660929",
+   "date": "2026-10-19",
+   "title": "Senior AI/ML Engineer - Technical Representative for US Remote Projects",
+   "url": "https://www.upwork.com/jobs/~022112090110157610065",
+   "bid": 15,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Accepted",
+   "viewed": false
+  },
+  {
+   "id": "2110644935954706433",
+   "date": "2026-10-15",
+   "title": "Full Stack React AI-native Developer for SaaS Dashboard",
+   "url": "https://www.upwork.com/jobs/~022110643142501356743",
+   "bid": 15,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Accepted",
+   "viewed": false
+  },
+  {
+   "id": "2101620284899282945",
+   "date": "2026-09-20",
+   "title": "Full Stack Software Engineer – Paid AI Interview Research Study",
+   "url": "https://www.upwork.com/jobs/~022101537119509412195",
+   "bid": 12,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Accepted",
+   "viewed": false
+  },
+  {
+   "id": "2094488429017133057",
+   "date": "2026-08-31",
+   "title": "AI Engineer for Daily Widget Development",
+   "url": "https://www.upwork.com/jobs/~022094466874307552501",
+   "bid": 5,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Hired",
+   "viewed": false
+  },
+  {
+   "id": "2115108885183655937",
+   "date": "2026-10-27",
+   "title": "AI Automation Developer Needed for API Integration and Workflow Optimization",
+   "url": "https://www.upwork.com/jobs/~022115105846664896349",
+   "bid": 15,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Declined",
+   "viewed": false
+  },
+  {
+   "id": "2068029267517730817",
+   "date": "2026-06-19",
+   "title": "Full Stack AI Developer for Bug Fixes",
+   "url": "https://www.upwork.com/jobs/~022068028119153123556",
+   "bid": 5,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Declined",
+   "viewed": false
+  },
+  {
+   "id": "2053814046939312129",
+   "date": "2026-05-11",
+   "title": "Data Analyst / Data Scientist (Short-Term Contract | Remote)",
+   "url": "https://www.upwork.com/jobs/~022053807707371212519",
+   "bid": 264,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Declined",
+   "viewed": false
+  },
+  {
+   "id": "2027260349768925185",
+   "date": "2026-02-27",
+   "title": "AI Code Review and Improvement Specialist",
+   "url": "https://www.upwork.com/jobs/~022027250334310843842",
+   "bid": 500,
+   "boosted": true,
+   "connects_bid": 11,
+   "status": "Declined",
+   "viewed": false
+  },
+  {
+   "id": "1990829278798200833",
+   "date": "2025-11-18",
+   "title": "Machine Learning Engineer for 3-Month Project",
+   "url": "https://www.upwork.com/jobs/~021990814520485708155",
+   "bid": 12,
+   "boosted": true,
+   "connects_bid": 17,
+   "status": "Declined",
+   "viewed": false
+  },
+  {
+   "id": "2114002704182722561",
+   "date": "2026-10-24",
+   "title": "Full-Stack + Mobile + AI Developer (Flutter, Next.js, Firebase) — Full-Time, Mission-Driven",
+   "url": "https://www.upwork.com/jobs/~022113998927745754219",
+   "bid": 1100,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Archived",
+   "viewed": true
+  },
+  {
+   "id": "2113970285754580993",
+   "date": "2026-10-24",
+   "title": "AI Business Process Automation Engineer",
+   "url": "https://www.upwork.com/jobs/~022113760036778169234",
+   "bid": 3000,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Archived",
+   "viewed": false
+  },
+  {
+   "id": "2111857259273322497",
+   "date": "2026-10-18",
+   "title": "Review an LLM fine-tuning experiment design (LoRA, evaluation, small-sample statistics)",
+   "url": "https://www.upwork.com/jobs/~022111853585570812651",
+   "bid": 400,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Archived",
+   "viewed": true
+  },
+  {
+   "id": "2111098470892548097",
+   "date": "2026-10-16",
+   "title": "Data Scientist",
+   "url": "https://www.upwork.com/jobs/~022111095106077576291",
+   "bid": 15,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Archived",
+   "viewed": false
+  },
+  {
+   "id": "2110646014322827265",
+   "date": "2026-10-15",
+   "title": "Looking for an AI wizard to help with my coaching program",
+   "url": "https://www.upwork.com/jobs/~022110645220328801621",
+   "bid": 15,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Archived",
+   "viewed": false
+  },
+  {
+   "id": "2110642200966508545",
+   "date": "2026-10-15",
+   "title": "AI bssed follow up system",
+   "url": "https://www.upwork.com/jobs/~022110603805785553639",
+   "bid": 100,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Archived",
+   "viewed": false
+  },
+  {
+   "id": "2110362329093320705",
+   "date": "2026-10-14",
+   "title": "AI Research Engineer – Agentic Job Search & CV Optimization",
+   "url": "https://www.upwork.com/jobs/~022110325783830648353",
+   "bid": 50,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Archived",
+   "viewed": false
+  },
+  {
+   "id": "2110097417130389505",
+   "date": "2026-10-13",
+   "title": "Ai Orchestrator For Business",
+   "url": "https://www.upwork.com/jobs/~022110095160662600981",
+   "bid": 150,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Archived",
+   "viewed": false
+  },
+  {
+   "id": "2110058147328552961",
+   "date": "2026-10-13",
+   "title": "AI Automation Expert (AI Implementation Specialist)",
+   "url": "https://www.upwork.com/jobs/~022110015192784365538",
+   "bid": 15,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Archived",
+   "viewed": false
+  },
+  {
+   "id": "2104459484112687105",
+   "date": "2026-09-28",
+   "title": "Search Relevance and Machine Learning Specialist",
+   "url": "https://www.upwork.com/jobs/~022104444038341942255",
+   "bid": 12,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Archived",
+   "viewed": false
+  },
+  {
+   "id": "2103560922796572673",
+   "date": "2026-09-25",
+   "title": "AI Automation Expert – Personal Injury Law Firm Reception, Intake, Medical Records & Case Management",
+   "url": "https://www.upwork.com/jobs/~022103549670129109428",
+   "bid": 12,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Archived",
+   "viewed": false
+  },
+  {
+   "id": "2103520297310965761",
+   "date": "2026-09-25",
+   "title": "Agentic AI-Powered Legal Document Intelligence Platform",
+   "url": "https://www.upwork.com/jobs/~022103517948167014206",
+   "bid": 12,
+   "boosted": true,
+   "connects_bid": 13,
+   "status": "Archived",
+   "viewed": false
+  },
+  {
+   "id": "2103473789349580801",
+   "date": "2026-09-25",
+   "title": "Search & ML Data Scientists - 100% remote, ASAP, 12+ months",
+   "url": "https://www.upwork.com/jobs/~022103452876375837055",
+   "bid": 12,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Archived",
+   "viewed": true
+  },
+  {
+   "id": "2103180922521407489",
+   "date": "2026-09-24",
+   "title": "Python Developer for Financial Document Parsing App",
+   "url": "https://www.upwork.com/jobs/~022103170611160795548",
+   "bid": 12,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Archived",
+   "viewed": true
+  },
+  {
+   "id": "2102123175891181569",
+   "date": "2026-09-21",
+   "title": "Data Scientist / ML Engineer for DataAnnotation Platform",
+   "url": "https://www.upwork.com/jobs/~022102111804637672146",
+   "bid": 12,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Archived",
+   "viewed": false
+  },
+  {
+   "id": "2102069650088341505",
+   "date": "2026-09-21",
+   "title": "Data Scientist / ML Engineer for Data Annotation platform",
+   "url": "https://www.upwork.com/jobs/~022102056886291936987",
+   "bid": 12,
+   "boosted": true,
+   "connects_bid": 33,
+   "status": "Archived",
+   "viewed": true
+  },
+  {
+   "id": "2100965205193543681",
+   "date": "2026-09-18",
+   "title": "Python Expert with Copilot Experience",
+   "url": "https://www.upwork.com/jobs/~022100962237511986396",
+   "bid": 12,
+   "boosted": true,
+   "connects_bid": 24,
+   "status": "Archived",
+   "viewed": false
+  },
+  {
+   "id": "2100318292472041473",
+   "date": "2026-09-16",
+   "title": "Data Scientist / NLP Engineer — Evaluate & Enhance Scoring Framework, Job Posting Classification",
+   "url": "https://www.upwork.com/jobs/~022100314158683750167",
+   "bid": 30,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Archived",
+   "viewed": false
+  },
+  {
+   "id": "2100315996348510209",
+   "date": "2026-09-16",
+   "title": "ChatGPT Expert",
+   "url": "https://www.upwork.com/jobs/~022100256450715968435",
+   "bid": 10,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Archived",
+   "viewed": false
+  },
+  {
+   "id": "2100188397447032833",
+   "date": "2026-09-16",
+   "title": "Senior Full-Stack AI Engineer(only individual freelancer)",
+   "url": "https://www.upwork.com/jobs/~022100185250718729117",
+   "bid": 12,
+   "boosted": true,
+   "connects_bid": 33,
+   "status": "Archived",
+   "viewed": false
+  },
+  {
+   "id": "2100180475383033857",
+   "date": "2026-09-16",
+   "title": "Need Someone to Automate Our Business Workflows Using AI",
+   "url": "https://www.upwork.com/jobs/~022100178561774506119",
+   "bid": 200,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Archived",
+   "viewed": false
+  },
+  {
+   "id": "2097717876345458689",
+   "date": "2026-09-09",
+   "title": "Fine-Tune an AI Model for a medical report",
+   "url": "https://www.upwork.com/jobs/~022097712033127643454",
+   "bid": 110,
+   "boosted": true,
+   "connects_bid": 19,
+   "status": "Archived",
+   "viewed": false
+  },
+  {
+   "id": "2097380205893349377",
+   "date": "2026-09-08",
+   "title": "AI/LLM Engineer for Personalized AI Wealth Coaching Platform",
+   "url": "https://www.upwork.com/jobs/~022097374160510401598",
+   "bid": 250,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Archived",
+   "viewed": true
+  },
+  {
+   "id": "2097366468502290433",
+   "date": "2026-09-08",
+   "title": "Data Scientist needed – Computer Vision & AI Solutions",
+   "url": "https://www.upwork.com/jobs/~022097350647820991550",
+   "bid": 12,
+   "boosted": true,
+   "connects_bid": 26,
+   "status": "Archived",
+   "viewed": false
+  },
+  {
+   "id": "2096999038571342862",
+   "date": "2026-09-07",
+   "title": "Biomedical Informatics, Bioinformatics, Computational Biology Master Preferred",
+   "url": "https://www.upwork.com/jobs/~022096997534262178868",
+   "bid": 8,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Archived",
+   "viewed": false
+  },
+  {
+   "id": "2095583682529542145",
+   "date": "2026-09-03",
+   "title": "AI-Powered App to Match Businesses with Online Communities",
+   "url": "https://www.upwork.com/jobs/~022095577996687850371",
+   "bid": 400,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Archived",
+   "viewed": false
+  },
+  {
+   "id": "2094504635491074049",
+   "date": "2026-08-31",
+   "title": "AI Coach Wanted: Get Our Team From Chatting to Actually Building (Weekly Sessions)",
+   "url": "https://www.upwork.com/jobs/~022094490362019882229",
+   "bid": 12,
+   "boosted": true,
+   "connects_bid": 31,
+   "status": "Archived",
+   "viewed": true
+  },
+  {
+   "id": "2089476949843148801",
+   "date": "2026-08-17",
+   "title": "Medical NLP Annotation - Oncology Adverse Event Detection",
+   "url": "https://www.upwork.com/jobs/~022089473071917717126",
+   "bid": 8,
+   "boosted": false,
+   "connects_bid": null,
+   "status": "Archived",
+   "viewed": false
+  }
+ ]
+}

@@ -110,6 +110,8 @@ function sheet(title, links) {
 const NAV = [
   { id: 'dashboard', label: 'Dashboard', ic: '🏠' },
   { id: 'leads', label: 'Leads', ic: '💬' },
+  { id: 'projects', label: 'Projects', ic: '📁' },
+  { id: 'upwork', label: 'Upwork', ic: '🟢' },
   { id: 'income', label: 'Income', ic: '💰' },
   { id: 'expenses', label: 'Expenses', ic: '🧾' },
   { id: 'subs', label: 'Subscriptions', ic: '🔁' },
@@ -127,8 +129,8 @@ function buildNav() {
   $('#bottomNav').innerHTML = BOTTOM.map((n) => `<a href="#${n.id === 'money' || n.id === 'more' ? '' : n.id}" data-b="${n.id}"><span class="ic">${n.ic}</span>${n.label}</a>`).join('');
   $$('#bottomNav a').forEach((a) => (a.onclick = (e) => {
     const b = a.dataset.b;
-    if (b === 'money') { e.preventDefault(); sheet('Money', [{ ic: '💰', label: 'Income', href: '#income' }, { ic: '🧾', label: 'Expenses', href: '#expenses' }, { ic: '📣', label: 'Add today\'s Meta ads spend', fn: () => quickAds() }, { ic: '🔁', label: 'Subscriptions', href: '#subs' }]); }
-    if (b === 'more') { e.preventDefault(); sheet('More', [{ ic: '👥', label: 'Staff', href: '#staff' }, { ic: '🖥️', label: 'Apps on Render', href: '#apps' }, { ic: '⚙️', label: 'Settings', href: '#settings' }]); }
+    if (b === 'money') { e.preventDefault(); sheet('Money', [{ ic: '💰', label: 'Income', href: '#income' }, { ic: '🧾', label: 'Expenses', href: '#expenses' }, { ic: '📣', label: 'Add today\'s Meta ads spend', fn: () => quickAds() }, { ic: '🔁', label: 'Subscriptions', href: '#subs' }, { ic: '🟢', label: 'Upwork', href: '#upwork' }]); }
+    if (b === 'more') { e.preventDefault(); sheet('More', [{ ic: '📁', label: 'Projects', href: '#projects' }, { ic: '🟢', label: 'Upwork — Connects, proposals, earnings', href: '#upwork' }, { ic: '👥', label: 'Staff', href: '#staff' }, { ic: '🖥️', label: 'Apps on Render', href: '#apps' }, { ic: '⚙️', label: 'Settings', href: '#settings' }]); }
   }));
   $('#quickBtn').onclick = quickAdd;
 }
@@ -138,6 +140,9 @@ function quickAdd() {
     { ic: '🧾', label: 'Expense', fn: () => expenseForm() },
     { ic: '💰', label: 'Income / payment received', fn: () => incomeForm() },
     { ic: '💬', label: 'Lead (manual)', fn: () => leadForm() },
+    { ic: '📨', label: 'Upwork proposal sent', fn: () => proposalForm() },
+    { ic: '🟢', label: 'Bought Upwork Connects', fn: () => buyConnects() },
+    { ic: '📁', label: 'Project', fn: () => projectForm() },
   ]);
 }
 window.addEventListener('hashchange', route);
@@ -145,7 +150,7 @@ async function route() {
   const v = (location.hash.slice(1) || 'dashboard').split('?')[0];
   S.view = NAV.some((n) => n.id === v) ? v : 'dashboard';
   $$('#sideNav a').forEach((a) => a.classList.toggle('active', a.dataset.v === S.view));
-  const bmap = { income: 'money', expenses: 'money', subs: 'money', staff: 'more', apps: 'more', settings: 'more' };
+  const bmap = { income: 'money', expenses: 'money', subs: 'money', upwork: 'more', projects: 'more', staff: 'more', apps: 'more', settings: 'more' };
   $$('#bottomNav a').forEach((a) => a.classList.toggle('active', a.dataset.b === (bmap[S.view] || S.view)));
   closeDrawer(); destroyCharts();
   $('#pageTitle').textContent = NAV.find((n) => n.id === S.view).label;
@@ -185,9 +190,12 @@ const VIEWS = {};
 VIEWS.dashboard = async () => {
   actions(`<button class="btn main" id="adsBtn">📣 Today's Meta ads</button><button class="btn light" id="qaBtn">＋ Add</button>`);
   $('#adsBtn').onclick = quickAds; $('#qaBtn').onclick = quickAdd;
-  const [sum, st, fu, mon] = await Promise.all([
+  const [sum, st, fu, mon, projs, cn] = await Promise.all([
     api('/api/accounts/summary?month=' + thisMonth()), api('/api/stats'), api('/api/followups'), api('/api/monitors').catch(() => ({ monitors: [] })),
+    api('/api/projects?status=ongoing').catch(() => []), api('/api/upwork/connects').catch(() => null),
   ]);
+  const projDue = projs.filter((p) => p.deadline && p.deadline <= new Date(Date.now() + 3 * 864e5).toLocaleDateString('en-CA'));
+  const projRemaining = projs.reduce((s, p) => s + (p.remaining_pkr || 0), 0);
   const c = sum.current, p = sum.previous;
   const delta = (a, b) => (b ? `${a >= b ? '▲' : '▼'} ${Math.abs(Math.round(((a - b) / Math.abs(b)) * 100))}% vs ${monthShort(p.month)}` : '');
   const down = mon.monitors.filter((m) => m.last_checked && !(m.last_status && m.last_status < 500));
@@ -199,11 +207,13 @@ VIEWS.dashboard = async () => {
     ...sum.subscriptions.upcoming.map((s) => ({ ic: '🔁', html: `<b>${s.overdue ? 'Overdue' : 'Due'}:</b> ${esc(s.name)} — ${cur(s.amount, s.currency)} <span class="sub">${fmtShort(s.next_due)}</span>`, fn: () => (location.hash = 'subs') })),
     ...sum.staff.unpaid.map((s) => ({ ic: '👥', html: `<b>Salary not paid yet:</b> ${esc(s.name)} — ${cur(s.monthly_salary, s.salary_currency)}`, fn: () => (location.hash = 'staff') })),
     ...(down.length ? [{ ic: '🔴', html: `<b>${down.length} app${down.length > 1 ? 's' : ''} not responding:</b> <span class="sub">${down.slice(0, 4).map((m) => esc(m.name)).join(', ')}${down.length > 4 ? '…' : ''}</span>`, fn: () => (location.hash = 'apps') }] : []),
+    ...projDue.map((p) => ({ ic: '📁', html: `<b>${p.deadline < todayStr() ? 'Project overdue' : 'Deadline soon'}:</b> ${esc(p.name)} <span class="sub">${fmtShort(p.deadline)}</span>`, fn: () => (location.hash = 'projects') })),
+    ...(cn && cn.isSet && cn.balance < 30 ? [{ ic: '🟢', html: `<b>Low Upwork Connects:</b> ${cn.balance} left`, fn: () => (location.hash = 'upwork') }] : []),
     ...(sum.pending.n ? [{ ic: '💸', html: `<b>Pending payments:</b> ${rs(sum.pending.total)} from ${sum.pending.n} client(s)`, fn: () => (location.hash = 'income') }] : []),
   ];
   const ads = sum.ads;
   $('#view').innerHTML = `
-    <div class="tiles four">
+    <div class="tiles four five">
       <div class="tile click" data-go="income"><div class="l">Income · ${monthLabel(c.month)}</div><div class="n">${rsK(c.income)}</div><div class="s">${delta(c.income, p.income)}</div></div>
       <div class="tile red click" data-go="expenses"><div class="l">Expenses</div><div class="n">${rsK(c.expenses)}</div><div class="s">${delta(c.expenses, p.expenses)}</div></div>
       <div class="tile ${c.profit >= 0 ? 'green' : 'red'} click" data-go="accounts"><div class="l">${c.profit >= 0 ? 'Profit' : 'Loss'}</div><div class="n">${rsK(c.profit)}</div><div class="s">${c.income ? Math.round((c.profit / c.income) * 100) + '% margin' : ''}</div></div>
@@ -212,6 +222,8 @@ VIEWS.dashboard = async () => {
       <div class="tile click" data-go="income"><div class="l">Pending payments</div><div class="n">${rsK(sum.pending.total)}</div><div class="s">${sum.pending.n} unpaid</div></div>
       <div class="tile click" data-go="subs"><div class="l">Subscriptions / month</div><div class="n">${rsK(sum.subscriptions.monthlyBurn)}</div><div class="s">${sum.subscriptions.count} active</div></div>
       <div class="tile click" data-go="staff"><div class="l">Staff payroll / month</div><div class="n">${rsK(sum.staff.payroll)}</div><div class="s">${sum.staff.active} on salary</div></div>
+      <div class="tile click" data-go="projects"><div class="l">Ongoing projects</div><div class="n">${projs.length}</div><div class="s">${projRemaining ? rsK(projRemaining) + ' still to receive' : ''}${projDue.length ? ` · ${projDue.length} due soon` : ''}</div></div>
+      <div class="tile ${cn && cn.isSet && cn.balance < 30 ? 'red' : ''} click" data-go="upwork"><div class="l">Upwork Connects</div><div class="n">${cn && cn.isSet ? cn.balance : '—'}</div><div class="s">${cn && cn.isSet ? 'available' : 'tap to set balance'}</div></div>
     </div>
     <div class="cols3">
       <div class="card"><div class="ch">Income vs expenses — last 12 months</div><div class="cb"><div class="chartbox"><canvas id="cMonths"></canvas></div></div></div>
@@ -494,6 +506,234 @@ async function openLead(id) {
   };
 }
 
+
+// ------------------------------------------------------------ PROJECTS
+S.projStatus = 'ongoing';
+const projBadge = (s) => `<span class="badge ${{ ongoing: 'b-info', paused: 'b-warn', completed: 'b-good', cancelled: 'b-mute' }[s] || 'b-mute'}">${s}</span>`;
+const platBadge = (p) => `<span class="badge ${p === 'Upwork' ? 'b-good' : p === 'Local' ? 'b-info' : 'b-mute'}" style="font-size:11px">${esc(p)}</span>`;
+VIEWS.projects = async () => {
+  actions(`<button class="btn main" id="addProj">＋ Project</button>`);
+  $('#addProj').onclick = () => projectForm();
+  const st = S.projStatus, plat = S.projPlat || 'all';
+  const [rows, allRows] = await Promise.all([api(`/api/projects?status=${st}&platform=${plat}`), api('/api/projects')]);
+  const ongoing = allRows.filter((p) => p.status === 'ongoing');
+  const t = todayStr();
+  $('#view').innerHTML = `
+    <div class="tiles four">
+      <div class="tile"><div class="l">Ongoing</div><div class="n">${ongoing.length}</div><div class="s">${ongoing.filter((p) => p.platform === 'Upwork').length} on Upwork · ${ongoing.filter((p) => p.platform === 'Local').length} local</div></div>
+      <div class="tile red"><div class="l">Still to receive (ongoing)</div><div class="n">${rsK(ongoing.reduce((s, p) => s + (p.remaining_pkr || 0), 0))}</div><div class="s">${rsK(allRows.reduce((s, p) => s + p.pending_pkr, 0))} invoiced & pending</div></div>
+      <div class="tile green"><div class="l">Received from all projects</div><div class="n">${rsK(allRows.reduce((s, p) => s + p.received_pkr, 0))}</div></div>
+      <div class="tile"><div class="l">Completed</div><div class="n">${allRows.filter((p) => p.status === 'completed').length}</div></div>
+    </div>
+    <div class="toolbar"><div class="chips">${[['ongoing', 'Ongoing'], ['paused', 'Paused'], ['completed', 'Completed'], ['cancelled', 'Cancelled'], ['all', 'All']].map(([k, l]) => `<button class="chip ${st === k ? 'active' : ''}" data-ps="${k}">${l}</button>`).join('')}</div>
+      <select id="pPlat" class="inp"><option value="all">All platforms</option>${['Upwork', 'Local', 'Direct', 'Other'].map((p) => `<option ${plat === p ? 'selected' : ''}>${p}</option>`).join('')}</select></div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr))">${rows.length ? rows.map((p, i) => {
+      const pct = p.budget_pkr ? Math.min(100, Math.round((p.received_pkr / p.budget_pkr) * 100)) : null;
+      const due = p.deadline ? (p.status === 'ongoing' && p.deadline < t ? `<span class="bad">overdue · ${fmtShort(p.deadline)}</span>` : `due ${fmtShort(p.deadline)}`) : '';
+      return `<div class="card" style="cursor:pointer" data-pi="${i}"><div class="cb">
+        <div style="display:flex;gap:8px;align-items:flex-start"><div style="flex:1;min-width:0"><div class="name" style="white-space:normal">${esc(p.name)}</div>
+          <div class="sub">${esc(p.client || '')}${p.contract_type ? ' · ' + p.contract_type : ''}${due ? ' · ' + due : ''}</div></div>${platBadge(p.platform)} ${projBadge(p.status)}</div>
+        <div style="display:flex;justify-content:space-between;margin:10px 0 4px"><span class="sub">Received</span><b>${rs(p.received_pkr)}${p.budget ? ` <span class="sub">of ${cur(p.budget, p.currency)}</span>` : ''}</b></div>
+        ${pct != null ? `<div class="bar"><div style="width:${pct}%;background:${pct >= 100 ? '#137a3a' : BLUE}"></div></div>` : ''}
+        <div class="sub" style="margin-top:6px">${p.pending_pkr ? `<span class="today">${rs(p.pending_pkr)} pending</span> · ` : ''}${p.payments} payment(s)${p.costs_pkr ? ` · fees/costs ${rs(p.costs_pkr)}` : ''}${p.completed_date ? ' · done ' + fmtShort(p.completed_date) : ''}</div>
+        ${p.live_url ? `<a class="sub" href="${esc(p.live_url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 ${esc(p.live_url.replace(/^https?:\/\//, ''))}</a>` : ''}
+        <div class="addrow" style="margin-top:10px">
+          <button class="btn sm main" data-ppay="${i}">💰 Payment</button>
+          ${p.status === 'ongoing' ? `<button class="btn sm light" data-pdone="${i}">✓ Completed</button>` : ''}
+          ${p.status === 'completed' ? `<button class="btn sm light" data-pdemo="${i}">🎬 Add to demos</button>` : ''}
+        </div></div></div>`;
+    }).join('') : '<div class="card empty">No projects here. Add your Upwork contracts and local client work.</div>'}</div>`;
+  $$('[data-ps]').forEach((b) => (b.onclick = () => { S.projStatus = b.dataset.ps; VIEWS.projects(); }));
+  $('#pPlat').onchange = () => { S.projPlat = $('#pPlat').value; VIEWS.projects(); };
+  $$('[data-pi]').forEach((el) => (el.onclick = () => projectForm(rows[+el.dataset.pi])));
+  $$('[data-ppay]').forEach((b) => (b.onclick = (e) => { e.stopPropagation(); projectPayment(rows[+b.dataset.ppay]); }));
+  $$('[data-pdone]').forEach((b) => (b.onclick = async (e) => {
+    e.stopPropagation(); const p = rows[+b.dataset.pdone];
+    openForm({ title: `Complete: ${p.name}`, submit: 'Mark completed', fields: [
+      { name: 'completed_date', label: 'Completed on', type: 'date', value: todayStr() },
+      { name: 'live_url', label: 'Live link (for demos & monitoring)', type: 'url', value: p.live_url || '', placeholder: 'https://…' },
+      { name: 'to_demo', label: '🎬 Add to my demo list (to send to leads)', type: 'checkbox', value: !!p.live_url }],
+      onSubmit: async (v) => {
+        await api('/api/projects/' + p.id, { method: 'PATCH', body: { status: 'completed', completed_date: v.completed_date, live_url: v.live_url } });
+        if (v.to_demo) { await api(`/api/projects/${p.id}/to-demo`, { method: 'POST', body: { link: v.live_url } }); S.catalog = null; }
+        toast(v.to_demo ? 'Completed · added to demos' : 'Completed 🎉'); route();
+      } });
+  }));
+  $$('[data-pdemo]').forEach((b) => (b.onclick = async (e) => {
+    e.stopPropagation(); const p = rows[+b.dataset.pdemo];
+    const r = await api(`/api/projects/${p.id}/to-demo`, { method: 'POST', body: {} }); S.catalog = null;
+    toast(r.added ? 'Added to demo list' + (p.live_url ? ' + uptime checks' : '') : 'Already in demo list');
+  }));
+};
+function projectForm(p) {
+  openForm({
+    title: p ? 'Edit project' : 'New project', submit: p ? 'Save' : 'Add project',
+    fields: [
+      { name: 'name', label: 'Project name', required: true, value: p?.name },
+      { name: 'client', label: 'Client', value: p?.client },
+      { name: 'platform', label: 'Platform', type: 'select', options: [['Upwork', 'Upwork'], ['Local', 'Local (Pakistan)'], ['Direct', 'Direct international'], ['Other', 'Other']], value: p?.platform || 'Upwork' },
+      { name: 'contract_type', label: 'Contract', type: 'select', options: [['fixed', 'Fixed price'], ['hourly', 'Hourly'], ['monthly', 'Monthly retainer']], value: p?.contract_type || 'fixed' },
+      { name: 'budget', label: 'Budget / contract value', type: 'number', value: p?.budget || '' },
+      { name: 'currency', label: 'Currency', type: 'select', options: S.fin.currencies, value: p?.currency || 'USD' },
+      { name: 'start_date', label: 'Started', type: 'date', value: p?.start_date || todayStr() },
+      { name: 'deadline', label: 'Deadline', type: 'date', value: p?.deadline || '' },
+      { name: 'status', label: 'Status', type: 'select', options: ['ongoing', 'paused', 'completed', 'cancelled'], value: p?.status || 'ongoing' },
+      { name: 'contract_url', label: 'Upwork contract / brief link', type: 'url', value: p?.contract_url || '' },
+      { name: 'live_url', label: 'Live link', type: 'url', value: p?.live_url || '' },
+      { name: 'repo_url', label: 'GitHub repo', type: 'url', value: p?.repo_url || '' },
+      { name: 'tech', label: 'Tech used', value: p?.tech, placeholder: 'Node, Neon, Render, RAG…' },
+      { name: 'from_meta', label: '📣 Client came from Meta ads', type: 'checkbox', value: p?.from_meta },
+      { name: 'description', label: 'Notes / scope', type: 'textarea', rows: 3, value: p?.description },
+    ],
+    onSubmit: async (v) => { if (p) await api('/api/projects/' + p.id, { method: 'PATCH', body: v }); else await api('/api/projects', { method: 'POST', body: v }); toast('Saved'); route(); },
+    onDelete: p && (async () => { await api('/api/projects/' + p.id, { method: 'DELETE' }); toast('Deleted'); route(); }),
+  });
+}
+function projectPayment(p) {
+  const up = p.platform === 'Upwork';
+  openForm({
+    title: `Payment: ${p.name}`, submit: 'Save payment',
+    extra: up ? '<div class="sub">Enter the <b>gross</b> amount the client paid. The Upwork fee is saved as an Upwork expense, so you see gross, fee and net.</div>' : '',
+    fields: [
+      { name: 'amount', label: up ? 'Gross amount (before fee)' : 'Amount', type: 'number', required: true },
+      { name: 'currency', label: 'Currency', type: 'select', options: S.fin.currencies, value: p.currency },
+      { name: 'date', label: 'Date', type: 'date', value: todayStr() },
+      { name: 'milestone', label: 'Milestone / period', placeholder: up ? 'e.g. Milestone 2, Week 47' : 'e.g. Advance 50%' },
+      { name: 'fee_percent', label: up ? 'Upwork fee %' : 'Platform fee % (if any)', type: 'number', value: up ? 10 : '' },
+      { name: 'status', label: 'Status', type: 'select', options: [['received', 'Received'], ['pending', 'Pending / in review']] },
+      { name: 'method', label: 'Received via', value: up ? 'Upwork' : '', list: ['Upwork', 'Bank transfer', 'Cash', 'JazzCash', 'Easypaisa', 'Payoneer', 'Wise'] },
+      { name: 'rate', label: 'Rate to PKR', type: 'number', placeholder: 'auto from Settings' },
+    ],
+    onSubmit: async (v) => { await api(`/api/projects/${p.id}/payment`, { method: 'POST', body: v }); toast('Payment saved'); route(); },
+  });
+}
+
+// ------------------------------------------------------------ UPWORK
+VIEWS.upwork = async () => {
+  actions(`<button class="btn light" id="uImp">⬆ Import Upwork file</button><button class="btn light" id="uSet">Set Connects</button><button class="btn light" id="uBuy">＋ Buy Connects</button><button class="btn main" id="uProp">＋ Proposal</button>
+    <input type="file" id="uFile" accept=".json,application/json" class="hidden" />`);
+  $('#uSet').onclick = setConnects; $('#uBuy').onclick = buyConnects; $('#uProp').onclick = () => proposalForm();
+  $('#uImp').onclick = () => $('#uFile').click();
+  $('#uFile').onchange = async () => {
+    const f = $('#uFile').files[0]; if (!f) return;
+    try {
+      const r = await api('/api/upwork/import', { method: 'POST', body: await f.text() });
+      const c = r.counts; toast(`Imported: ${c.income} payments, ${c.fees} fees, ${c.connects} Connects buys, ${c.proposals} proposals, ${c.projects} contracts`); route();
+    } catch (e) { toast('Import failed: ' + e.message); }
+  };
+  const [d, imp] = await Promise.all([api('/api/upwork/summary?month=' + S.month), api('/api/upwork/import').catch(() => null)]);
+  const c = d.connects, pr = d.proposals;
+  const statuses = ['sent', 'viewed', 'interview', 'hired', 'declined', 'archived'];
+  const stBadge = { sent: 'b-mute', viewed: 'b-info', interview: 'b-warn', hired: 'b-good', declined: 'b-bad', archived: 'b-mute' };
+  $('#view').innerHTML = `
+    <div class="toolbar">${monthPicker()}<span class="sub">${imp ? `Synced from Upwork on ${fmtDT(imp.fetched_at)} · ask Claude "sync my Upwork" for a fresh file` : 'Tip: ask Claude "sync my Upwork" and import the file it gives you'}</span></div>
+    <div class="tiles four">
+      <div class="tile ${c.isSet && c.balance < 30 ? 'red' : ''} click" id="cnTile"><div class="l">🟢 Connects available</div><div class="n">${c.isSet ? c.balance : '—'}</div>
+        <div class="s">${c.isSet ? `set ${c.setBalance} on ${fmtShort(c.setAt)} · +${c.boughtSince} bought · −${c.usedSince} used` : 'tap to enter your balance'}</div></div>
+      <div class="tile green"><div class="l">Earned on Upwork · ${monthShort(S.month)}</div><div class="n">${rsK(d.earned.pkr)}</div><div class="s">${d.earned.usd ? '$' + d.earned.usd.toLocaleString() + ' · ' : ''}${d.earned.n} payment(s)${d.pending.n ? ` · ${rsK(d.pending.pkr)} pending` : ''}</div></div>
+      <div class="tile red"><div class="l">Spent on Upwork · ${monthShort(S.month)}</div><div class="n">${rsK(d.spent.pkr)}</div><div class="s">${d.spent.usd ? '$' + d.spent.usd.toFixed(2) + ' · ' : ''}Connects, fees, membership</div></div>
+      <div class="tile ${d.net >= 0 ? 'green' : 'red'}"><div class="l">Net · ${monthShort(S.month)}</div><div class="n">${rsK(d.net)}</div><div class="s">${d.roi != null ? d.roi.toFixed(1) + 'x return' : ''}</div></div>
+      <div class="tile"><div class="l">Proposals · ${monthShort(S.month)}</div><div class="n">${pr.sent}</div><div class="s">${pr.connects} Connects · ${pr.viewed} viewed · ${pr.interviews} interviews · ${pr.hired} hired</div></div>
+      <div class="tile"><div class="l">Win rate</div><div class="n">${pr.winRate != null ? Math.round(pr.winRate * 100) + '%' : '—'}</div><div class="s">all time ${pr.allHired}/${pr.allSent}${pr.costPerProposal ? ` · ${rs(pr.costPerProposal)} per proposal` : ''}</div></div>
+      <div class="tile"><div class="l">All time on Upwork</div><div class="n">${rsK(d.allTime.net)}</div><div class="s">${rsK(d.allTime.earned.pkr)} earned − ${rsK(d.allTime.spent.pkr)} spent${d.allTime.roi ? ` · ${d.allTime.roi.toFixed(1)}x` : ''}</div></div>
+      <div class="tile click" data-go2="projects"><div class="l">Ongoing Upwork projects</div><div class="n">${d.projects.length}</div><div class="s">${rsK(d.projects.reduce((s, p) => s + p.received_pkr, 0))} received so far</div></div>
+    </div>
+    <div class="cols3">
+      <div class="card"><div class="ch">Earned vs spent — last 12 months</div><div class="cb"><div class="chartbox"><canvas id="cUp"></canvas></div></div></div>
+      <div class="card"><div class="ch">Spending · ${monthShort(S.month)}</div><div class="cb">
+        ${d.byType.length ? d.byType.map((x) => `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line)"><span>${esc(x.t)} <span class="sub">(${x.n})</span></span><b>${rs(x.pkr)}</b></div>`).join('') : '<div class="sub">Nothing spent this month.</div>'}
+        <div class="sub" style="margin:12px 0 6px">Quick add</div>
+        <div class="chips" style="flex-wrap:wrap">${['Connects', 'Freelancer Plus membership', 'Service fee', 'Withdrawal fee', 'Boosted proposals'].map((t) => `<button class="chip" data-us="${t}">＋ ${t}</button>`).join('')}</div>
+      </div></div>
+    </div>
+    <div class="card" style="margin-top:12px"><div class="ch">📨 Proposals <span class="r"><button class="btn sm main" id="uProp2">＋ Proposal</button></span></div>
+      <div class="list">${d.recentProposals.length ? d.recentProposals.map((p, i) => `
+        <div class="li" data-pr="${i}"><div class="grow"><div class="t">${esc(p.job_title)}</div>
+          <div class="sub">${fmtDate(p.date)} · ${p.connects + p.boost} Connects${p.boost ? ` (${p.boost} boost)` : ''}${p.bid ? ` · bid ${cur(p.bid, 'USD')}${p.bid_type === 'hourly' ? '/hr' : ''}` : ''}${p.sent_by ? ' · by ' + esc(p.sent_by) : ''}</div></div>
+          <select class="st ${stBadge[p.status]}" data-prs="${p.id}" onclick="event.stopPropagation()">${statuses.map((s) => `<option ${s === p.status ? 'selected' : ''}>${s}</option>`).join('')}</select>
+          ${p.status === 'hired' && !p.project_id ? `<button class="btn sm main" data-prp="${p.id}">→ Project</button>` : ''}
+          ${p.job_url ? `<a class="btn sm ghost" href="${esc(p.job_url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗</a>` : ''}</div>`).join('')
+        : '<div class="empty">Log each proposal you send. Its Connects come off your balance and you can see your win rate.</div>'}</div></div>
+    <div class="cols2" style="margin-top:12px">
+      <div class="card"><div class="ch">Recent Upwork payments</div><div class="list">${d.recent.length ? d.recent.map((x) => `<div class="li"><div class="grow"><div class="t">${esc(x.client)}</div><div class="sub">${fmtDate(x.date)}${x.project ? ' · ' + esc(x.project) : ''}</div></div>
+        <div class="amt ${x.status === 'pending' ? 'today' : 'good'}">${cur(x.amount, x.currency)}</div></div>`).join('') : '<div class="empty">No Upwork income yet.</div>'}</div></div>
+      <div class="card"><div class="ch">Top Upwork clients (all time)</div><div class="cb">${d.clients.length ? d.clients.map((x) => `
+        <div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between"><span>${esc(x.client)}</span><b>${rs(x.total)}</b></div>
+        <div class="bar"><div style="width:${(x.total / d.clients[0].total) * 100}%;background:#14a800"></div></div></div>`).join('') : '<div class="sub">No clients yet.</div>'}</div></div>
+    </div>`;
+  bindMonth(VIEWS.upwork);
+  $('#cnTile').onclick = setConnects; $('#uProp2').onclick = () => proposalForm();
+  $$('[data-go2]').forEach((el) => (el.onclick = () => { S.projStatus = 'ongoing'; S.projPlat = 'Upwork'; location.hash = 'projects'; }));
+  $$('[data-us]').forEach((b) => (b.onclick = () => (b.dataset.us === 'Connects' ? buyConnects() : upworkSpend(b.dataset.us))));
+  $$('[data-pr]').forEach((el) => (el.onclick = () => proposalForm(d.recentProposals[+el.dataset.pr])));
+  $$('[data-prs]').forEach((s) => (s.onchange = async () => {
+    await api('/api/proposals/' + s.dataset.prs, { method: 'PATCH', body: { status: s.value } });
+    toast('Status: ' + s.value + (s.value === 'hired' ? ' 🎉 — tap "→ Project" to start tracking it' : '')); VIEWS.upwork();
+  }));
+  $$('[data-prp]').forEach((b) => (b.onclick = async (e) => { e.stopPropagation(); await api(`/api/proposals/${b.dataset.prp}/to-project`, { method: 'POST' }); toast('Project created'); S.projStatus = 'ongoing'; location.hash = 'projects'; }));
+  const draw = () => chart($('#cUp'), { type: 'bar', data: { labels: d.months.map((m) => monthShort(m.month)), datasets: [
+    { label: 'Earned', data: d.months.map((m) => m.earned), backgroundColor: '#14a800', borderRadius: 4 },
+    { label: 'Spent', data: d.months.map((m) => m.spent), backgroundColor: RED, borderRadius: 4 }] },
+    options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: (x) => `${x.dataset.label}: ${rs(x.raw)}` } } }, scales: { y: { ticks: { callback: (v) => rsK(v) } } } } });
+  if (window.Chart) draw(); else window.addEventListener('load', draw, { once: true });
+};
+function setConnects() {
+  openForm({ title: '🟢 Connects balance', submit: 'Save balance',
+    extra: '<div class="sub">Open Upwork → Connects and type the number you see. From now on, Connects you buy are added and proposals you log are subtracted. Update it anytime (e.g. after your monthly free Connects).</div>',
+    fields: [{ name: 'balance', label: 'Available Connects right now', type: 'number', required: true }],
+    onSubmit: async (v) => { await api('/api/upwork/connects', { method: 'PUT', body: v }); toast('Connects balance saved'); route(); } });
+}
+function buyConnects() {
+  const f = openForm({ title: '🟢 Bought Connects', submit: 'Save',
+    fields: [
+      { name: 'qty', label: 'How many Connects', type: 'number', required: true, value: 80 },
+      { name: 'amount', label: 'Paid', type: 'number', required: true, value: 12 },
+      { name: 'currency', label: 'Currency', type: 'select', options: S.fin.currencies, value: 'USD' },
+      { name: 'date', label: 'Date', type: 'date', value: todayStr() },
+    ],
+    onSubmit: async (v) => {
+      await api('/api/expenses', { method: 'POST', body: { ...v, category: 'Upwork', subcategory: 'Connects', vendor: 'Upwork', description: `${v.qty} connects` } });
+      toast(`+${v.qty} Connects`); route();
+    } });
+  f.elements.qty.addEventListener('input', () => { const n = +f.elements.qty.value; if (n > 0 && f.elements.currency.value === 'USD') f.elements.amount.value = (n * 0.15).toFixed(2); });
+}
+function upworkSpend(type) {
+  openForm({ title: `Upwork: ${type}`, submit: 'Save',
+    fields: [
+      { name: 'amount', label: 'Amount', type: 'number', required: true, value: type === 'Freelancer Plus membership' ? 19.99 : type === 'Withdrawal fee' ? 2 : '' },
+      { name: 'currency', label: 'Currency', type: 'select', options: S.fin.currencies, value: 'USD' },
+      { name: 'date', label: 'Date', type: 'date', value: todayStr() },
+      { name: 'description', label: 'Details', placeholder: type === 'Service fee' ? 'which contract' : '' },
+    ],
+    onSubmit: async (v) => { await api('/api/expenses', { method: 'POST', body: { ...v, category: 'Upwork', subcategory: type, vendor: 'Upwork', description: v.description || type } }); toast('Saved'); route(); } });
+}
+async function proposalForm(p) {
+  const staff = await api('/api/staff').catch(() => []);
+  openForm({
+    title: p ? 'Edit proposal' : '📨 Proposal sent', submit: p ? 'Save' : 'Save proposal',
+    extra: p ? '' : '<div class="sub">The Connects you enter are subtracted from your balance.</div>',
+    fields: [
+      { name: 'job_title', label: 'Job title', required: true, value: p?.job_title },
+      { name: 'job_url', label: 'Job link', type: 'url', value: p?.job_url || '' },
+      { name: 'connects', label: 'Connects used', type: 'number', value: p?.connects ?? 16, required: true },
+      { name: 'boost', label: 'Boost Connects (if boosted)', type: 'number', value: p?.boost || 0 },
+      { name: 'bid', label: 'Your bid (USD)', type: 'number', value: p?.bid || '' },
+      { name: 'bid_type', label: 'Bid type', type: 'select', options: [['fixed', 'Fixed'], ['hourly', 'Hourly']], value: p?.bid_type || 'fixed' },
+      { name: 'client', label: 'Client (if known)', value: p?.client },
+      { name: 'date', label: 'Date', type: 'date', value: p?.date || todayStr() },
+      { name: 'status', label: 'Status', type: 'select', options: ['sent', 'viewed', 'interview', 'hired', 'declined', 'archived'], value: p?.status || 'sent' },
+      { name: 'sent_by', label: 'Sent by', value: p?.sent_by || '', list: ['Me', ...staff.filter((s) => s.status === 'active').map((s) => s.name)] },
+      { name: 'notes', label: 'Notes', type: 'textarea', rows: 2, value: p?.notes },
+    ],
+    onSubmit: async (v) => {
+      if (p) await api('/api/proposals/' + p.id, { method: 'PATCH', body: v });
+      else { const r = await api('/api/proposals', { method: 'POST', body: v }); if (r.connects?.isSet) toast(`Saved · ${r.connects.balance} Connects left`); }
+      if (p) toast('Saved'); route();
+    },
+    onDelete: p && (async () => { await api('/api/proposals/' + p.id, { method: 'DELETE' }); toast('Deleted'); route(); }),
+  });
+}
+
 // ------------------------------------------------------------ INCOME
 VIEWS.income = async () => {
   actions(`<button class="btn main" id="addInc">＋ Payment received</button>`);
@@ -520,6 +760,7 @@ VIEWS.income = async () => {
 const isMetaLead = (l) => l && (l.platform === 'messenger' || l.platform === 'instagram');
 async function incomeForm(r, preset = {}) {
   const leads = S.leadsAll || (S.leadsAll = await api('/api/leads').catch(() => []));
+  const projects = await api('/api/projects').catch(() => []);
   const findLead = (name) => leads.find((l) => l.name && l.name.trim().toLowerCase() === String(name || '').trim().toLowerCase());
   const pre = { ...preset };
   const form = openForm({
@@ -531,7 +772,8 @@ async function incomeForm(r, preset = {}) {
       { name: 'amount', label: 'Amount', type: 'number', required: true, value: r?.amount },
       { name: 'currency', label: 'Currency', type: 'select', options: S.fin.currencies, value: r?.currency || 'PKR' },
       { name: 'from_meta', label: '📣 This customer came from Meta ads (Facebook / Instagram)', type: 'checkbox', value: r ? r.from_meta : !!pre.from_meta },
-      { name: 'project', label: 'Project', value: r?.project, placeholder: 'e.g. Water delivery app' },
+      { name: 'project_id', label: 'Project (optional)', type: 'select', value: r?.project_id || pre.project_id || '', options: [['', '— not linked —'], ...projects.map((p) => [p.id, `${p.name}${p.client ? ' · ' + p.client : ''}${p.status !== 'ongoing' ? ' (' + p.status + ')' : ''}`])] },
+      { name: 'project', label: 'Project name / work', value: r?.project, placeholder: 'e.g. Water delivery app' },
       { name: 'source', label: 'Source', value: r?.source ?? pre.source, list: ['Meta ads', 'Upwork', 'Local client', 'International client', 'Referral', 'Website'] },
       { name: 'method', label: 'Received via', value: r?.method, list: ['Bank transfer', 'Cash', 'JazzCash', 'Easypaisa', 'Payoneer', 'Upwork', 'Wise'] },
       { name: 'status', label: 'Status', type: 'select', options: [['received', 'Received'], ['pending', 'Pending (invoice sent)']], value: r?.status || 'received' },
@@ -556,6 +798,13 @@ async function incomeForm(r, preset = {}) {
     if (!touched && (isMetaLead(l) || viaSource)) cb.checked = true;
     hint.innerHTML = l ? `Linked to lead <b>${esc(l.name)}</b> (${platLabel[l.platform] || l.platform}${l.platform !== 'manual' ? ' — came in through Meta' : ''})` : '';
   };
+  form.elements.project_id.addEventListener('change', () => {
+    const p = projects.find((x) => String(x.id) === form.elements.project_id.value); if (!p) return;
+    if (!form.elements.client.value) form.elements.client.value = p.client || p.name;
+    form.elements.project.value = p.name;
+    if (!form.elements.source.value) form.elements.source.value = p.platform === 'Upwork' ? 'Upwork' : p.platform === 'Local' ? 'Local client' : p.platform;
+    form.elements.currency.value = p.currency; check();
+  });
   form.elements.client.addEventListener('input', check);
   form.elements.source.addEventListener('input', check);
   check();
@@ -596,6 +845,8 @@ function expenseForm(r) {
       { name: 'amount', label: 'Amount', type: 'number', required: true, value: r?.amount },
       { name: 'currency', label: 'Currency', type: 'select', options: S.fin.currencies, value: r?.currency || 'PKR' },
       { name: 'vendor', label: 'Paid to', value: r?.vendor, placeholder: 'e.g. GuaranteedCRM, Hostinger' },
+      { name: 'subcategory', label: 'Type (optional)', value: r?.subcategory, list: ['Connects', 'Freelancer Plus membership', 'Service fee', 'Withdrawal fee', 'Boosted proposals'], placeholder: 'e.g. Connects (for Upwork)' },
+      { name: 'qty', label: 'Connects bought (if Connects)', type: 'number', value: r?.qty || '' },
       { name: 'method', label: 'Paid via', value: r?.method, list: ['Card', 'Bank transfer', 'Cash', 'JazzCash', 'Easypaisa', 'Payoneer'] },
       { name: 'rate', label: 'Rate to PKR (if not PKR)', type: 'number', value: r && r.currency !== 'PKR' ? r.rate : '', placeholder: 'auto from Settings' },
       { name: 'description', label: 'Details', type: 'textarea', rows: 2, value: r?.description },

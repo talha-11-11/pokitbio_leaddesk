@@ -194,11 +194,23 @@ export async function setupOps(app, pool, { APP_TZ = 'Asia/Karachi', RENDER_API_
       all(`SELECT name, next_due, amount::float, currency FROM subscriptions WHERE active AND $1::date IS NOT NULL AND next_due <= ($2::date + 14) ORDER BY next_due`, p),
       all(`SELECT name, url, last_status, last_ms, last_checked, down_since, last_error FROM monitors WHERE active ORDER BY kind, name`),
     ]);
+    const [upEarned, upSpent, projOngoing, projDone, props] = await Promise.all([
+      one(`SELECT COALESCE(SUM(i.amount_pkr),0)::float pkr, COUNT(*)::int n FROM income i LEFT JOIN projects p ON p.id=i.project_id
+           WHERE (i.source ILIKE 'upwork%' OR p.platform='Upwork') AND i.status='received' AND i.date BETWEEN $1 AND $2`, p),
+      all(`SELECT COALESCE(subcategory,'Other') t, SUM(amount_pkr)::float pkr FROM expenses WHERE category='Upwork' AND date BETWEEN $1 AND $2 GROUP BY 1 ORDER BY 2 DESC`, p),
+      all(`SELECT p.name, p.client, p.platform, p.deadline, p.budget::float, p.currency,
+             COALESCE((SELECT SUM(amount_pkr) FROM income i WHERE i.project_id=p.id AND i.status='received'),0)::float received
+           FROM projects p WHERE p.status IN ('ongoing','paused') ORDER BY p.deadline NULLS LAST`),
+      all(`SELECT p.name, p.client, p.platform, p.completed_date, p.live_url,
+             COALESCE((SELECT SUM(amount_pkr) FROM income i WHERE i.project_id=p.id AND i.status='received'),0)::float received
+           FROM projects p WHERE p.status='completed' AND p.completed_date BETWEEN $1 AND $2 ORDER BY p.completed_date`, p),
+      all(`SELECT date, job_title, connects + boost AS connects, status, bid::float FROM proposals WHERE date BETWEEN $1 AND $2 ORDER BY date`, p),
+    ]).catch(() => [{ pkr: 0, n: 0 }, [], [], [], []]);
     const income = incomeRows.filter((x) => x.status === 'received').reduce((s, x) => s + x.amount_pkr, 0);
     const expenses = expRows.reduce((s, x) => s + x.amount_pkr, 0);
     const adsTotal = ads.reduce((s, x) => s + x.pkr, 0);
     const metaEarned = incomeRows.filter((x) => x.from_meta && x.status === 'received').reduce((s, x) => s + x.amount_pkr, 0);
-    return { metaEarned, period, range: r, income, expenses, profit: income - expenses, pendingInc, incomeRows, expRows, byCat, ads, adsTotal,
+    return { props, upEarned, upSpent, projOngoing, projDone, metaEarned, period, range: r, income, expenses, profit: income - expenses, pendingInc, incomeRows, expRows, byCat, ads, adsTotal,
       newLeads, contacted, demos, calls, fuDone, fuOpen, won, lost, salaries, subsPaid, subsUpcoming, monitors };
   }
 
@@ -301,6 +313,24 @@ export async function setupOps(app, pool, { APP_TZ = 'Asia/Karachi', RENDER_API_
         (d.adsTotal ? `Return: ${(d.metaEarned / d.adsTotal).toFixed(1)}x (every Rs 1 spent brought Rs ${(d.metaEarned / d.adsTotal).toFixed(1)})` : 'no ad spend logged'), X).moveDown(0.3);
     table([{ h: 'Paid on', w: 0.25 }, { h: 'Client from Meta ads', w: 0.5 }, { h: 'PKR', w: 0.25, a: 'right' }], metaRows.map((x) => [fmtD(x.date), x.client, rs(x.amount_pkr)]));
     table([{ h: 'Date', w: 0.4 }, { h: 'USD', w: 0.3, a: 'right' }, { h: 'PKR', w: 0.3, a: 'right' }], d.ads.map((a) => [fmtD(a.date), a.usd ? '$' + a.usd.toFixed(2) : '—', rs(a.pkr)]));
+
+    section('Projects');
+    doc.font('Helvetica').fontSize(10).fill(INK).text(`Ongoing: ${d.projOngoing.length}   ·   Completed in this period: ${d.projDone.length}`, X).moveDown(0.3);
+    table([{ h: 'Ongoing project', w: 0.3 }, { h: 'Client', w: 0.22 }, { h: 'Platform', w: 0.13 }, { h: 'Deadline', w: 0.15 }, { h: 'Received', w: 0.2, a: 'right' }],
+      d.projOngoing.map((x) => [x.name, x.client || '', x.platform, x.deadline ? fmtD(x.deadline) : '—', rs(x.received) + (x.budget ? `\nof ${x.currency} ${x.budget.toLocaleString()}` : '')]));
+    table([{ h: 'Completed', w: 0.3 }, { h: 'Client', w: 0.22 }, { h: 'On', w: 0.15 }, { h: 'Link', w: 0.18 }, { h: 'Earned', w: 0.15, a: 'right' }],
+      d.projDone.map((x) => [x.name, x.client || '', fmtD(x.completed_date), x.live_url ? 'live' : '', rs(x.received)]));
+
+    section('Upwork');
+    const upSpentTotal = d.upSpent.reduce((s, x) => s + x.pkr, 0);
+    doc.font('Helvetica-Bold').fontSize(10.5).fill(d.upEarned.pkr >= upSpentTotal ? '#137a3a' : RED)
+      .text(`Earned on Upwork: ${rs(d.upEarned.pkr)} (${d.upEarned.n} payment(s))   ·   Spent on Upwork: ${rs(upSpentTotal)}   ·   Net: ${rs(d.upEarned.pkr - upSpentTotal)}`, X).moveDown(0.3);
+    table([{ h: 'Upwork spending', w: 0.6 }, { h: 'PKR', w: 0.4, a: 'right' }], d.upSpent.map((x) => [x.t, rs(x.pkr)]));
+    const hired = d.props.filter((x) => x.status === 'hired').length, cn = d.props.reduce((s, x) => s + x.connects, 0);
+    doc.font('Helvetica').fontSize(10).fill(INK).text(`Proposals sent: ${d.props.length}   ·   Connects used: ${cn}   ·   Hired: ${hired}` +
+      (d.props.length ? `   ·   Win rate: ${Math.round((hired / d.props.length) * 100)}%` : ''), X).moveDown(0.3);
+    table([{ h: 'Date', w: 0.15 }, { h: 'Job', w: 0.5 }, { h: 'Connects', w: 0.12, a: 'right' }, { h: 'Status', w: 0.23 }],
+      d.props.map((x) => [fmtD(x.date), x.job_title, String(x.connects), x.status]));
 
     section('Income');
     if (!d.incomeRows.length) empty('No income recorded in this period.');

@@ -7,6 +7,7 @@ import pg from 'pg';
 import { extractAll } from './extract.js';
 import { setupFinance } from './finance.js';
 import { setupOps } from './ops.js';
+import { setupProjects } from './projects.js';
 
 pg.types.setTypeParser(1082, (v) => v); // DATE columns come back as plain 'YYYY-MM-DD'
 
@@ -180,7 +181,7 @@ async function saveMessage(leadId, { mid, direction, text, created_at }) {
 
 // ---------------------------------------------------------------- app
 const app = express();
-app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
+app.use(express.json({ limit: '5mb', verify: (req, _res, buf) => { req.rawBody = buf; } }));
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 app.get('/healthz', wrap(async (_req, res) => { await pool.query('SELECT 1'); res.send('ok'); }));
@@ -439,6 +440,7 @@ app.get('/api/export.csv', wrap(async (_req, res) => {
 
 await setupFinance(app, pool, { APP_TZ });
 await setupOps(app, pool, { APP_TZ, RENDER_API_KEY: process.env.RENDER_API_KEY, MONITOR_INTERVAL_MIN: process.env.MONITOR_INTERVAL_MIN || 30, SELF_URL: process.env.RENDER_EXTERNAL_URL || process.env.SELF_URL });
+await setupProjects(app, pool, { APP_TZ });
 
 // one-time pass over messages already stored (only fills empty fields)
 (async () => {
