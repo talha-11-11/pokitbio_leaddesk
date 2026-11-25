@@ -5,6 +5,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { extractAll } from './extract.js';
+import { setupFinance } from './finance.js';
+import { setupOps } from './ops.js';
+
+pg.types.setTypeParser(1082, (v) => v); // DATE columns come back as plain 'YYYY-MM-DD'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const {
@@ -271,7 +275,11 @@ app.get('/api/leads/:id', wrap(async (req, res) => {
     all(`SELECT * FROM notes WHERE lead_id=$1 ORDER BY created_at DESC, id DESC`, [id]),
     all(`SELECT * FROM followups WHERE lead_id=$1 ORDER BY (done_at IS NOT NULL), due_at`, [id]),
   ]);
-  res.json({ ...lead, messages, notes, followups });
+  const [demos, calls] = await Promise.all([
+    all(`SELECT * FROM lead_demos WHERE lead_id=$1 ORDER BY sent_at DESC`, [id]),
+    all(`SELECT * FROM calls WHERE lead_id=$1 ORDER BY call_at DESC`, [id]),
+  ]);
+  res.json({ ...lead, messages, notes, followups, demos, calls });
 }));
 
 app.post('/api/leads', wrap(async (req, res) => {
@@ -429,6 +437,9 @@ app.get('/api/export.csv', wrap(async (_req, res) => {
     .send([cols.join(','), ...rows.map((r) => cols.map((c) => cell(r[c])).join(','))].join('\n'));
 }));
 
+await setupFinance(app, pool, { APP_TZ });
+await setupOps(app, pool, { APP_TZ, RENDER_API_KEY: process.env.RENDER_API_KEY, MONITOR_INTERVAL_MIN: process.env.MONITOR_INTERVAL_MIN || 30, SELF_URL: process.env.RENDER_EXTERNAL_URL || process.env.SELF_URL });
+
 // one-time pass over messages already stored (only fills empty fields)
 (async () => {
   const leads = await all(`SELECT id FROM leads WHERE phone IS NULL OR business IS NULL OR name IS NULL`);
@@ -440,6 +451,7 @@ app.get('/api/export.csv', wrap(async (_req, res) => {
   if (leads.length) console.log(`checked ${leads.length} leads for name/phone/business in old messages`);
 })().catch((e) => console.warn('backfill failed', e.message));
 
+app.get('/vendor/chart.umd.js', (_req, res) => res.sendFile(path.join(__dirname, 'node_modules/chart.js/dist/chart.umd.js')));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use((err, _req, res, _next) => { console.error(err); res.status(500).json({ error: err.message }); });
 app.listen(PORT, () => console.log(`PokitBio Lead Desk running on :${PORT}`));
