@@ -48,6 +48,7 @@ export async function setupFinance(app, pool, { APP_TZ = 'Asia/Karachi' } = {}) 
     lead_id INTEGER REFERENCES leads(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
   );
+  ALTER TABLE income ADD COLUMN IF NOT EXISTS from_meta BOOLEAN NOT NULL DEFAULT false;
   CREATE INDEX IF NOT EXISTS idx_exp_date ON expenses(date);
   CREATE INDEX IF NOT EXISTS idx_inc_date ON income(date);
   INSERT INTO settings(key, value) VALUES ('rates', '${JSON.stringify(DEFAULT_RATES)}') ON CONFLICT (key) DO NOTHING;
@@ -216,21 +217,23 @@ export async function setupFinance(app, pool, { APP_TZ = 'Asia/Karachi' } = {}) 
   app.get('/api/income', wrap(async (req, res) => {
     const where = [], args = [];
     if (req.query.month) { const [a, b] = monthRange(req.query.month); args.push(a, b); where.push(`i.date >= $${args.length - 1} AND i.date < $${args.length}`); }
-    if (req.query.status && req.query.status !== 'all') { args.push(req.query.status); where.push(`i.status=$${args.length}`); }
+    if (req.query.status === 'meta') where.push(`i.from_meta`);
+    else if (req.query.status && req.query.status !== 'all') { args.push(req.query.status); where.push(`i.status=$${args.length}`); }
     if (req.query.q) { args.push(`%${req.query.q}%`); where.push(`(i.client ILIKE $${args.length} OR i.project ILIKE $${args.length} OR i.description ILIKE $${args.length})`); }
     const rows = await all(`SELECT i.*, i.amount::float, i.amount_pkr::float, i.rate::float FROM income i
       ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY i.date DESC, i.id DESC LIMIT 2000`, args);
     res.json(fixDates(rows));
   }));
-  const INC_FIELDS = ['date', 'client', 'project', 'description', 'method', 'status', 'source', 'lead_id'];
+  const INC_FIELDS = ['date', 'client', 'project', 'description', 'method', 'status', 'source', 'lead_id', 'from_meta'];
+  const bool = (v) => v === true || v === 'true' || v === 'on' || v === 1 || v === '1';
   app.post('/api/income', wrap(async (req, res) => {
     const b = req.body || {};
     if (!b.client) return res.status(400).json({ error: 'client required' });
     const m = await money(b);
-    const r = await one(`INSERT INTO income (date, client, project, description, method, status, source, lead_id, amount, currency, rate, amount_pkr)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
+    const r = await one(`INSERT INTO income (date, client, project, description, method, status, source, lead_id, amount, currency, rate, amount_pkr, from_meta)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`,
       [b.date || todayLocal(), b.client, b.project || null, b.description || null, b.method || null, b.status === 'pending' ? 'pending' : 'received',
-       b.source || null, num(b.lead_id), m.amount, m.currency, m.rate, m.amount_pkr]);
+       b.source || null, num(b.lead_id), m.amount, m.currency, m.rate, m.amount_pkr, bool(b.from_meta)]);
     res.json(r);
   }));
   app.patch('/api/income/:id', wrap(async (req, res) => {
@@ -240,7 +243,7 @@ export async function setupFinance(app, pool, { APP_TZ = 'Asia/Karachi' } = {}) 
     const m = await money({ amount: b.amount ?? cur.amount, currency: b.currency ?? cur.currency, rate: b.rate ?? (b.currency && b.currency !== cur.currency ? null : cur.rate) });
     const keys = INC_FIELDS.filter((k) => k in b);
     await pool.query(`UPDATE income SET ${[...keys.map((k, i) => `${k}=$${i + 1}`), `amount=$${keys.length + 1}`, `currency=$${keys.length + 2}`, `rate=$${keys.length + 3}`, `amount_pkr=$${keys.length + 4}`].join(',')} WHERE id=$${keys.length + 5}`,
-      [...keys.map((k) => (k === 'lead_id' ? num(b[k]) : b[k] === '' ? null : b[k])), m.amount, m.currency, m.rate, m.amount_pkr, cur.id]);
+      [...keys.map((k) => (k === 'lead_id' ? num(b[k]) : k === 'from_meta' ? bool(b[k]) : b[k] === '' ? null : b[k])), m.amount, m.currency, m.rate, m.amount_pkr, cur.id]);
     res.json({ ok: true });
   }));
   app.delete('/api/income/:id', wrap(async (req, res) => { await pool.query(`DELETE FROM income WHERE id=$1`, [+req.params.id]); res.json({ ok: true }); }));
@@ -289,6 +292,21 @@ export async function setupFinance(app, pool, { APP_TZ = 'Asia/Karachi' } = {}) 
     const unpaidStaff = await all(`SELECT s.id, s.name, s.monthly_salary::float, s.salary_currency FROM staff s WHERE s.status='active' AND s.pay_type='salary' AND s.monthly_salary > 0
       AND NOT EXISTS (SELECT 1 FROM expenses e WHERE e.staff_id=s.id AND e.salary_month=$1)`, [month]);
 
+    const metaRow = await one(`SELECT
+        COALESCE(SUM(amount_pkr) FILTER (WHERE date >= $1 AND date < $2),0)::float AS month,
+        COUNT(*) FILTER (WHERE date >= $1 AND date < $2)::int AS month_n,
+        COALESCE(SUM(amount_pkr),0)::float AS all_time
+      FROM income WHERE from_meta AND status='received'`, [mStart, mEnd]);
+    const metaClients = await all(`SELECT client, SUM(amount_pkr)::float total FROM income WHERE from_meta AND status='received' AND date >= $1 AND date < $2 GROUP BY 1 ORDER BY 2 DESC LIMIT 10`, [mStart, mEnd]);
+    const metaPending = await one(`SELECT COALESCE(SUM(amount_pkr),0)::float total FROM income WHERE from_meta AND status='pending'`);
+    const adsAllTime = (await one(`SELECT COALESCE(SUM(amount_pkr),0)::float v FROM expenses WHERE category='Meta Ads'`)).v;
+    const metaMonthlyInc = await all(`SELECT to_char(date,'YYYY-MM') m, SUM(amount_pkr)::float v FROM income WHERE from_meta AND status='received' AND date >= $1 AND date < $2 GROUP BY 1`, [yearStart, mEnd]);
+    const metaMonthlyAds = await all(`SELECT to_char(date,'YYYY-MM') m, SUM(amount_pkr)::float v FROM expenses WHERE category='Meta Ads' AND date >= $1 AND date < $2 GROUP BY 1`, [yearStart, mEnd]);
+    for (const mo of months) {
+      mo.metaIncome = metaMonthlyInc.find((r) => r.m === mo.month)?.v || 0;
+      mo.metaSpend = metaMonthlyAds.find((r) => r.m === mo.month)?.v || 0;
+    }
+
     const leadStats = await one(`SELECT
       (SELECT COUNT(*)::int FROM leads WHERE created_at >= $1::date AND created_at < $2::date) AS new_leads,
       (SELECT COUNT(*)::int FROM leads WHERE status='won' AND updated_at >= $1::date AND updated_at < $2::date) AS won,
@@ -297,7 +315,10 @@ export async function setupFinance(app, pool, { APP_TZ = 'Asia/Karachi' } = {}) 
     res.json({
       month, months, current: cur, previous: prev, byCategory, bySource, byClient, pending,
       ads: { daily: adsDaily, total: adsTotal, activeDays: adsDays, avgPerDay: adsDays ? adsTotal / adsDays : 0,
-             costPerLead: leadStats.new_leads ? adsTotal / leadStats.new_leads : null },
+             costPerLead: leadStats.new_leads ? adsTotal / leadStats.new_leads : null,
+             earned: metaRow.month, earnedPayments: metaRow.month_n, earnedPending: metaPending.total, clients: metaClients,
+             roas: adsTotal ? metaRow.month / adsTotal : null, net: metaRow.month - adsTotal,
+             earnedAllTime: metaRow.all_time, spentAllTime: adsAllTime, roasAllTime: adsAllTime ? metaRow.all_time / adsAllTime : null },
       subscriptions: { monthlyBurn: Math.round(subsMonthly), count: subs.length, upcoming },
       staff: { active: staffActive.n, payroll: staffActive.payroll, unpaid: unpaidStaff },
       leads: leadStats,

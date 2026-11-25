@@ -1,5 +1,9 @@
 // Demos sent to leads, call log, Render / uptime monitor, PDF reports.
 import PDFDocument from 'pdfkit';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+const LOGO = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public', 'logo-wordmark.png');
 
 const DEFAULT_DEMOS = [
   { name: 'SA Footballer — AI sports media', link: 'https://safootballerdemo.onrender.com' },
@@ -172,7 +176,7 @@ export async function setupOps(app, pool, { APP_TZ = 'Asia/Karachi', RENDER_API_
     const loc = (c) => `(${c} AT TIME ZONE '${APP_TZ}')::date`;
     const inR = (c) => `${loc(c)} BETWEEN $1::date AND $2::date`;
     const [incomeRows, expRows, byCat, pendingInc, ads, newLeads, contacted, demos, calls, fuDone, fuOpen, won, lost, salaries, subsPaid, subsUpcoming, monitors] = await Promise.all([
-      all(`SELECT date, client, project, source, amount::float, currency, amount_pkr::float, status FROM income WHERE date BETWEEN $1 AND $2 ORDER BY date`, p),
+      all(`SELECT date, client, project, source, amount::float, currency, amount_pkr::float, status, from_meta FROM income WHERE date BETWEEN $1 AND $2 ORDER BY date`, p),
       all(`SELECT date, category, vendor, description, amount::float, currency, amount_pkr::float FROM expenses WHERE date BETWEEN $1 AND $2 ORDER BY date`, p),
       all(`SELECT category, SUM(amount_pkr)::float total FROM expenses WHERE date BETWEEN $1 AND $2 GROUP BY 1 ORDER BY 2 DESC`, p),
       one(`SELECT COALESCE(SUM(amount_pkr),0)::float total, COUNT(*)::int n FROM income WHERE status='pending'`),
@@ -193,7 +197,8 @@ export async function setupOps(app, pool, { APP_TZ = 'Asia/Karachi', RENDER_API_
     const income = incomeRows.filter((x) => x.status === 'received').reduce((s, x) => s + x.amount_pkr, 0);
     const expenses = expRows.reduce((s, x) => s + x.amount_pkr, 0);
     const adsTotal = ads.reduce((s, x) => s + x.pkr, 0);
-    return { period, range: r, income, expenses, profit: income - expenses, pendingInc, incomeRows, expRows, byCat, ads, adsTotal,
+    const metaEarned = incomeRows.filter((x) => x.from_meta && x.status === 'received').reduce((s, x) => s + x.amount_pkr, 0);
+    return { metaEarned, period, range: r, income, expenses, profit: income - expenses, pendingInc, incomeRows, expRows, byCat, ads, adsTotal,
       newLeads, contacted, demos, calls, fuDone, fuOpen, won, lost, salaries, subsPaid, subsUpcoming, monitors };
   }
 
@@ -217,11 +222,13 @@ export async function setupOps(app, pool, { APP_TZ = 'Asia/Karachi', RENDER_API_
     const ensure = (h) => { if (doc.y + h > bottom()) doc.addPage(); };
     const title = d.period[0].toUpperCase() + d.period.slice(1);
 
-    // header band
-    doc.rect(0, 0, doc.page.width, 80).fill(BLUE);
-    doc.fill('#fff').font('Helvetica-Bold').fontSize(20).text('Pokit', X, 24, { continued: true }).fill(RED).text('Bio', { continued: true }).fill('#fff').text(`  ${title} Report`);
-    doc.font('Helvetica').fontSize(11).fill('#dbe6ff').text(d.range.label + `   ·   generated ${fmtDT(new Date())}`, X, 52);
-    doc.y = 100;
+    // header band in brand coral with the PokitBio wordmark
+    doc.rect(0, 0, doc.page.width, 84).fill(RED);
+    if (fs.existsSync(LOGO)) doc.image(LOGO, X - 6, 10, { height: 64 });
+    doc.fill('#fff').font('Helvetica-Bold').fontSize(20).text(`${title} Report`, X, 22, { width: W, align: 'right' });
+    doc.font('Helvetica').fontSize(10.5).fill('#fff').text(d.range.label, X, 48, { width: W, align: 'right' });
+    doc.fontSize(8.5).fill('#ffe3e3').text(`generated ${fmtDT(new Date())}`, X, 63, { width: W, align: 'right' });
+    doc.y = 104;
 
     const section = (name) => { ensure(60); doc.moveDown(0.6); doc.font('Helvetica-Bold').fontSize(13).fill(BLUE).text(name, X); doc.moveTo(X, doc.y + 2).lineTo(X + W, doc.y + 2).lineWidth(1.5).stroke(RED); doc.moveDown(0.5); };
     const empty = (t) => doc.font('Helvetica-Oblique').fontSize(9.5).fill(MUTED).text(t, X).moveDown(0.3);
@@ -254,12 +261,12 @@ export async function setupOps(app, pool, { APP_TZ = 'Asia/Karachi', RENDER_API_
     ];
     const tw = (W - 20) / 3;
     tiles.forEach(([l, v, c], i) => {
-      const x = X + (i % 3) * (tw + 10), y = 100 + Math.floor(i / 3) * 58;
+      const x = X + (i % 3) * (tw + 10), y = 104 + Math.floor(i / 3) * 58;
       doc.roundedRect(x, y, tw, 50, 6).lineWidth(1).stroke(LINE);
       doc.font('Helvetica').fontSize(9).fill(MUTED).text(l, x + 10, y + 9, { width: tw - 20 });
       doc.font('Helvetica-Bold').fontSize(15).fill(c).text(v, x + 10, y + 24, { width: tw - 20 });
     });
-    doc.y = 100 + 2 * 58 + 4; doc.x = X;
+    doc.y = 104 + 2 * 58 + 4; doc.x = X;
     if (d.pendingInc.n) doc.font('Helvetica').fontSize(9.5).fill(MUTED).text(`Pending payments from clients (all time): ${rs(d.pendingInc.total)} across ${d.pendingInc.n} invoice(s).`, X);
 
     section('Leads & sales');
@@ -284,16 +291,21 @@ export async function setupOps(app, pool, { APP_TZ = 'Asia/Karachi', RENDER_API_
     doc.font('Helvetica').fontSize(10).fill(INK).text(`Completed in period: ${d.fuDone.length}   ·   Still open (due by ${fmtD(d.range.end)}): ${d.fuOpen.length}`, X).moveDown(0.3);
     table([{ h: 'Due', w: 0.2 }, { h: 'Lead', w: 0.3 }, { h: 'What', w: 0.5 }], d.fuOpen.map((f) => [fmtD(new Date(f.due_at).toISOString()), f.name || 'Unknown', f.note || '']));
 
-    section('Meta ads');
+    section('Meta ads — spend vs earnings');
     const days = d.ads.filter((a) => a.pkr > 0).length;
     doc.font('Helvetica').fontSize(10).fill(INK).text(`Total ${rs(d.adsTotal)} over ${days} day(s)` + (days ? `   ·   average ${rs(d.adsTotal / days)}/day` : '') +
       (d.newLeads.length && d.adsTotal ? `   ·   cost per new lead ${rs(d.adsTotal / d.newLeads.length)}` : ''), X).moveDown(0.3);
+    const metaRows = d.incomeRows.filter((x) => x.from_meta && x.status === 'received');
+    doc.font('Helvetica-Bold').fontSize(10.5).fill(d.metaEarned >= d.adsTotal ? '#137a3a' : RED)
+      .text(`Earned from Meta-ads customers: ${rs(d.metaEarned)}   ·   Spent: ${rs(d.adsTotal)}   ·   ` +
+        (d.adsTotal ? `Return: ${(d.metaEarned / d.adsTotal).toFixed(1)}x (every Rs 1 spent brought Rs ${(d.metaEarned / d.adsTotal).toFixed(1)})` : 'no ad spend logged'), X).moveDown(0.3);
+    table([{ h: 'Paid on', w: 0.25 }, { h: 'Client from Meta ads', w: 0.5 }, { h: 'PKR', w: 0.25, a: 'right' }], metaRows.map((x) => [fmtD(x.date), x.client, rs(x.amount_pkr)]));
     table([{ h: 'Date', w: 0.4 }, { h: 'USD', w: 0.3, a: 'right' }, { h: 'PKR', w: 0.3, a: 'right' }], d.ads.map((a) => [fmtD(a.date), a.usd ? '$' + a.usd.toFixed(2) : '—', rs(a.pkr)]));
 
     section('Income');
     if (!d.incomeRows.length) empty('No income recorded in this period.');
     table([{ h: 'Date', w: 0.14 }, { h: 'Client', w: 0.24 }, { h: 'Project / source', w: 0.26 }, { h: 'Amount', w: 0.14, a: 'right' }, { h: 'PKR', w: 0.13, a: 'right' }, { h: 'Status', w: 0.09 }],
-      d.incomeRows.map((x) => [fmtD(x.date), x.client, [x.project, x.source].filter(Boolean).join(' · '), `${x.currency} ${x.amount.toLocaleString()}`, rs(x.amount_pkr), x.status]));
+      d.incomeRows.map((x) => [fmtD(x.date), x.client + (x.from_meta ? '  [Meta ads]' : ''), [x.project, x.source].filter(Boolean).join(' · '), `${x.currency} ${x.amount.toLocaleString()}`, rs(x.amount_pkr), x.status]));
 
     section('Expenses by category');
     if (!d.byCat.length) empty('No expenses recorded in this period.');

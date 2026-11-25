@@ -5,8 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>PokitBio</title>
 <meta name="theme-color" content="#004AAD" />
+<meta name="application-name" content="PokitBio" />
 <link rel="manifest" href="/manifest.webmanifest" />
-<link rel="icon" href="/icons/icon-192.png" />
+<link rel="icon" href="/favicon.ico" sizes="any" />
+<link rel="icon" type="image/png" href="/icons/icon-192.png" />
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
@@ -29,7 +31,9 @@
 
   /* ---------- layout ---------- */
   .side { position: fixed; inset: 0 auto 0 0; width: var(--side); background: var(--sec); color: #fff; display: flex; flex-direction: column; z-index: 6; }
-  .side .brand { padding: 20px 20px 16px; font-weight: 800; font-size: 20px; }
+  .side .brand { padding: 16px 14px 14px; }
+  .side .brand img { width: 100%; display: block; border-radius: 10px; }
+  .topbar .tlogo { height: 34px; border-radius: 7px; display: block; }
   .brand span { color: var(--main); }
   .side nav { display: grid; gap: 2px; padding: 0 10px; }
   .side a.nav { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; color: #dbe6ff; text-decoration: none; font-weight: 600; }
@@ -232,7 +236,7 @@
 
 <div id="login" class="modal" style="place-items:center">
   <form class="box" id="loginForm" style="border-radius:14px;width:min(400px,100%)">
-    <div style="font-weight:800;font-size:24px;color:var(--sec)">Pokit<span style="color:var(--main)">Bio</span></div>
+    <img src="/logo-wordmark.png" alt="PokitBio" style="width:100%;border-radius:12px;display:block" />
     <div class="sub">Business app — enter your password</div>
     <label class="f">Password <input type="password" id="pw" required autofocus /></label>
     <button class="btn main">Open</button>
@@ -241,7 +245,7 @@
 </div>
 
 <aside class="side">
-  <div class="brand">Pokit<span>Bio</span></div>
+  <div class="brand"><img src="/logo-wordmark.png" alt="PokitBio" /></div>
   <nav id="sideNav"></nav>
   <div class="foot">
     <button id="installBtn" class="hidden">⬇ Install app</button>
@@ -251,7 +255,7 @@
 
 <div class="wrap">
   <div class="topbar">
-    <div class="brand">Pokit<span style="color:var(--main)">Bio</span></div>
+    <img class="tlogo" src="/logo-wordmark.png" alt="PokitBio" />
     <div class="tb-actions">
       <button id="installBtnM" class="hidden">⬇ Install</button>
       <button id="quickBtn">＋ Add</button>

@@ -207,7 +207,7 @@ VIEWS.dashboard = async () => {
       <div class="tile click" data-go="income"><div class="l">Income · ${monthLabel(c.month)}</div><div class="n">${rsK(c.income)}</div><div class="s">${delta(c.income, p.income)}</div></div>
       <div class="tile red click" data-go="expenses"><div class="l">Expenses</div><div class="n">${rsK(c.expenses)}</div><div class="s">${delta(c.expenses, p.expenses)}</div></div>
       <div class="tile ${c.profit >= 0 ? 'green' : 'red'} click" data-go="accounts"><div class="l">${c.profit >= 0 ? 'Profit' : 'Loss'}</div><div class="n">${rsK(c.profit)}</div><div class="s">${c.income ? Math.round((c.profit / c.income) * 100) + '% margin' : ''}</div></div>
-      <div class="tile red click" data-go="expenses?cat=Meta Ads"><div class="l">Meta ads this month</div><div class="n">${rsK(ads.total)}</div><div class="s">${ads.activeDays ? `avg ${rs(ads.avgPerDay)}/day` : 'nothing logged'}${ads.costPerLead ? ` · ${rs(ads.costPerLead)}/lead` : ''}</div></div>
+      <div class="tile ${ads.total && ads.earned >= ads.total ? 'green' : 'red'} click" data-go="income?meta"><div class="l">Meta ads: spent → earned</div><div class="n">${rsK(ads.total)} → ${rsK(ads.earned)}</div><div class="s">${ads.roas != null ? `${ads.roas.toFixed(1)}x return` : 'log ad spend to see return'}${ads.costPerLead ? ` · ${rs(ads.costPerLead)}/lead` : ''}</div></div>
       <div class="tile click" data-go="leads"><div class="l">New leads this month</div><div class="n">${sum.leads.new_leads}</div><div class="s">${st.notContacted} not contacted · ${sum.leads.demos} demos</div></div>
       <div class="tile click" data-go="income"><div class="l">Pending payments</div><div class="n">${rsK(sum.pending.total)}</div><div class="s">${sum.pending.n} unpaid</div></div>
       <div class="tile click" data-go="subs"><div class="l">Subscriptions / month</div><div class="n">${rsK(sum.subscriptions.monthlyBurn)}</div><div class="s">${sum.subscriptions.count} active</div></div>
@@ -219,12 +219,17 @@ VIEWS.dashboard = async () => {
         <div id="alerts">${alerts.length ? alerts.map((a, i) => `<div class="alert" data-i="${i}"><span class="ic">${a.ic}</span><div>${a.html}</div></div>`).join('') : '<div class="empty">All clear ✅</div>'}</div></div>
     </div>
     <div class="cols2" style="margin-top:12px">
-      <div class="card"><div class="ch">Meta ads — daily spend (${monthLabel(c.month)}) <button class="btn sm main r" id="adsBtn2">＋ Today</button></div><div class="cb"><div class="chartbox"><canvas id="cAds"></canvas></div></div></div>
+      <div class="card"><div class="ch">Meta ads — ${monthLabel(c.month)} <button class="btn sm main r" id="adsBtn2">＋ Today</button></div><div class="cb">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;text-align:center">
+          <div><div class="sub">Spent</div><div class="bad" style="font-size:16px">${rs(ads.total)}</div></div>
+          <div><div class="sub">Earned from Meta clients</div><div class="good" style="font-size:16px">${rs(ads.earned)}</div></div>
+          <div><div class="sub">Return</div><div class="${ads.roas >= 1 ? 'good' : 'bad'}" style="font-size:16px">${ads.roas != null ? ads.roas.toFixed(1) + 'x' : '—'}</div></div></div>
+        <div class="chartbox" style="height:200px"><canvas id="cAds"></canvas></div></div></div>
       <div class="card"><div class="ch">Where the money went (${monthShort(c.month)})</div><div class="cb">${sum.byCategory.length ? sum.byCategory.map((x) => `
         <div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between"><span>${esc(x.category)}</span><b>${rs(x.total)}</b></div>
         <div class="bar"><div style="width:${Math.max(3, (x.total / sum.byCategory[0].total) * 100)}%;background:${x.category === 'Meta Ads' ? RED : BLUE}"></div></div></div>`).join('') : '<div class="empty">No expenses yet this month.</div>'}</div></div>
     </div>`;
-  $$('[data-go]').forEach((el) => (el.onclick = () => { const [v, q] = el.dataset.go.split('?'); if (q) S.expCat = q.split('=')[1]; location.hash = v; }));
+  $$('[data-go]').forEach((el) => (el.onclick = () => { const [v, q] = el.dataset.go.split('?'); if (q === 'meta') S.incStatus = 'meta'; else if (q) S.expCat = q.split('=')[1]; location.hash = v; }));
   $$('#alerts .alert').forEach((el) => (el.onclick = () => alerts[+el.dataset.i].fn()));
   $('#adsBtn2').onclick = quickAds;
   const draw = () => {
@@ -432,7 +437,7 @@ async function openLead(id) {
       <div class="sec"><h3>Details</h3>
         <div class="grid2">${[['name', 'Name'], ['phone', 'Phone / WhatsApp'], ['business', 'Business'], ['email', 'Email'], ['interest', 'Interested in'], ['tags', 'Tags']]
           .map(([k, lab]) => `<label class="f">${lab}<input data-field="${k}" value="${esc(l[k] || '')}" /></label>`).join('')}</div>
-        <div class="addrow" style="justify-content:space-between"><button class="btn danger sm" id="delLead">Delete lead</button>
+        <div class="addrow" style="justify-content:space-between"><span style="display:flex;gap:6px"><button class="btn danger sm" id="delLead">Delete lead</button><button class="btn main sm" id="leadPay">💰 Add payment</button></span>
           <span style="display:flex;gap:6px;flex-wrap:wrap">${l.phone ? `<a class="btn light sm" style="text-decoration:none" target="_blank" href="https://wa.me/${esc(l.phone.replace(/\D/g, '').replace(/^0/, '92'))}">WhatsApp</a>` : ''}
           <a class="btn sm" style="text-decoration:none" target="_blank" href="https://business.facebook.com/latest/inbox">Meta inbox ↗</a></span></div></div>
 
@@ -482,6 +487,7 @@ async function openLead(id) {
     await api(`/api/leads/${id}/notes`, { method: 'POST', body: { text, created_at: dv && dv !== todayStr() ? dateToIso(dv) : new Date().toISOString() } }); again('Note saved');
   };
   $$('[data-delnote]', d).forEach((b) => (b.onclick = async () => { await api('/api/notes/' + b.dataset.delnote, { method: 'DELETE' }); again(); }));
+  $('#leadPay').onclick = () => incomeForm(null, { client: l.name || l.username || '', lead_id: l.id, from_meta: isMetaLead(l), source: isMetaLead(l) ? 'Meta ads' : '', afterSave: () => again() });
   $('#delLead').onclick = async () => {
     const b = $('#delLead'); if (b.dataset.c !== '1') { b.dataset.c = '1'; b.textContent = 'Tap again to delete'; return; }
     await api('/api/leads/' + id, { method: 'DELETE' }); closeDrawer(); toast('Lead deleted'); if (S.view === 'leads') loadLeads();
@@ -496,37 +502,63 @@ VIEWS.income = async () => {
   const rows = await api(`/api/income?month=${S.month}&status=${status}`);
   const rec = rows.filter((r) => r.status === 'received').reduce((s, r) => s + r.amount_pkr, 0);
   const pend = rows.filter((r) => r.status === 'pending').reduce((s, r) => s + r.amount_pkr, 0);
+  const metaRec = rows.filter((r) => r.from_meta && r.status === 'received').reduce((s, r) => s + r.amount_pkr, 0);
   $('#view').innerHTML = `
-    <div class="toolbar">${monthPicker()}<div class="chips">${[['all', 'All'], ['received', 'Received'], ['pending', 'Pending']].map(([k, l]) => `<button class="chip ${status === k ? 'active' : ''}" data-st="${k}">${l}</button>`).join('')}</div></div>
+    <div class="toolbar">${monthPicker()}<div class="chips">${[['all', 'All'], ['received', 'Received'], ['pending', 'Pending'], ['meta', '📣 From Meta ads']].map(([k, l]) => `<button class="chip ${status === k ? 'active' : ''}" data-st="${k}">${l}</button>`).join('')}</div></div>
     <div class="tiles"><div class="tile green"><div class="l">Received · ${monthLabel(S.month)}</div><div class="n">${rs(rec)}</div></div>
-      <div class="tile red"><div class="l">Pending (this month)</div><div class="n">${rs(pend)}</div></div><div class="tile"><div class="l">Payments</div><div class="n">${rows.length}</div></div></div>
+      <div class="tile red"><div class="l">Pending (this month)</div><div class="n">${rs(pend)}</div></div>
+      <div class="tile click" id="metaTile"><div class="l">📣 From Meta ads customers</div><div class="n">${rs(metaRec)}</div><div class="s">${rec ? Math.round((metaRec / rec) * 100) + '% of income' : ''}</div></div></div>
     <div class="card list">${rows.length ? rows.map((r, i) => `<div class="li" data-i="${i}">
-      <div class="grow"><div class="t">${esc(r.client)}</div><div class="sub">${fmtDate(r.date)}${r.project ? ' · ' + esc(r.project) : ''}${r.source ? ' · ' + esc(r.source) : ''}${r.method ? ' · ' + esc(r.method) : ''}</div></div>
+      <div class="grow"><div class="t">${esc(r.client)} ${r.from_meta ? '<span class="badge b-bad" style="font-size:11px">📣 Meta</span>' : ''}</div><div class="sub">${fmtDate(r.date)}${r.project ? ' · ' + esc(r.project) : ''}${r.source ? ' · ' + esc(r.source) : ''}${r.method ? ' · ' + esc(r.method) : ''}</div></div>
       <div><div class="amt ${r.status === 'pending' ? 'bad' : 'good'}">${cur(r.amount, r.currency)}</div><div class="sub" style="text-align:right">${r.currency !== 'PKR' ? rs(r.amount_pkr) + ' · ' : ''}<span class="badge ${r.status === 'pending' ? 'b-warn' : 'b-good'}">${r.status}</span></div></div></div>`).join('')
       : '<div class="empty">No income recorded for this month.</div>'}</div>`;
   bindMonth(VIEWS.income);
   $$('[data-st]').forEach((b) => (b.onclick = () => { S.incStatus = b.dataset.st; VIEWS.income(); }));
+  $('#metaTile').onclick = () => { S.incStatus = 'meta'; VIEWS.income(); };
   $$('.li[data-i]').forEach((el) => (el.onclick = () => incomeForm(rows[+el.dataset.i])));
 };
-async function incomeForm(r) {
+const isMetaLead = (l) => l && (l.platform === 'messenger' || l.platform === 'instagram');
+async function incomeForm(r, preset = {}) {
   const leads = S.leadsAll || (S.leadsAll = await api('/api/leads').catch(() => []));
-  openForm({
+  const findLead = (name) => leads.find((l) => l.name && l.name.trim().toLowerCase() === String(name || '').trim().toLowerCase());
+  const pre = { ...preset };
+  const form = openForm({
     title: r ? 'Edit payment' : 'Payment received', submit: r ? 'Save' : 'Add income',
+    extra: `<div class="sub" id="metaHint" style="margin-top:-4px"></div>`,
     fields: [
-      { name: 'client', label: 'Client', required: true, value: r?.client, list: [...new Set(leads.filter((l) => l.name).map((l) => l.name))] },
+      { name: 'client', label: 'Client', required: true, value: r?.client ?? pre.client, list: [...new Set(leads.filter((l) => l.name).map((l) => l.name))] },
       { name: 'date', label: 'Date', type: 'date', value: r?.date || todayStr(), required: true },
       { name: 'amount', label: 'Amount', type: 'number', required: true, value: r?.amount },
       { name: 'currency', label: 'Currency', type: 'select', options: S.fin.currencies, value: r?.currency || 'PKR' },
+      { name: 'from_meta', label: '📣 This customer came from Meta ads (Facebook / Instagram)', type: 'checkbox', value: r ? r.from_meta : !!pre.from_meta },
       { name: 'project', label: 'Project', value: r?.project, placeholder: 'e.g. Water delivery app' },
-      { name: 'source', label: 'Source', value: r?.source, list: ['Upwork', 'Local client', 'International client', 'Referral', 'Website', 'Meta lead'] },
+      { name: 'source', label: 'Source', value: r?.source ?? pre.source, list: ['Meta ads', 'Upwork', 'Local client', 'International client', 'Referral', 'Website'] },
       { name: 'method', label: 'Received via', value: r?.method, list: ['Bank transfer', 'Cash', 'JazzCash', 'Easypaisa', 'Payoneer', 'Upwork', 'Wise'] },
       { name: 'status', label: 'Status', type: 'select', options: [['received', 'Received'], ['pending', 'Pending (invoice sent)']], value: r?.status || 'received' },
       { name: 'rate', label: 'Rate to PKR (if not PKR)', type: 'number', value: r && r.currency !== 'PKR' ? r.rate : '', placeholder: 'auto from Settings' },
       { name: 'description', label: 'Note', type: 'textarea', rows: 2, value: r?.description },
     ],
-    onSubmit: async (v) => { if (r) await api('/api/income/' + r.id, { method: 'PATCH', body: v }); else await api('/api/income', { method: 'POST', body: v }); toast('Saved'); route(); },
+    onSubmit: async (v) => {
+      const lead = pre.lead_id ? { id: pre.lead_id } : findLead(v.client);
+      v.lead_id = r?.lead_id || lead?.id || '';
+      if (r) await api('/api/income/' + r.id, { method: 'PATCH', body: v }); else await api('/api/income', { method: 'POST', body: v });
+      toast(v.from_meta ? 'Saved · counted as Meta ads earning' : 'Saved'); if (pre.afterSave) pre.afterSave(); else route();
+    },
     onDelete: r && (async () => { await api('/api/income/' + r.id, { method: 'DELETE' }); toast('Deleted'); route(); }),
   });
+  // auto-tick when the client is a Messenger/Instagram lead, or source says Meta
+  const cb = form.elements.from_meta, hint = $('#metaHint');
+  let touched = !!r;
+  cb.addEventListener('change', () => (touched = true));
+  const check = () => {
+    const l = findLead(form.elements.client.value);
+    const viaSource = /meta|facebook|instagram/i.test(form.elements.source.value);
+    if (!touched && (isMetaLead(l) || viaSource)) cb.checked = true;
+    hint.innerHTML = l ? `Linked to lead <b>${esc(l.name)}</b> (${platLabel[l.platform] || l.platform}${l.platform !== 'manual' ? ' — came in through Meta' : ''})` : '';
+  };
+  form.elements.client.addEventListener('input', check);
+  form.elements.source.addEventListener('input', check);
+  check();
 }
 
 // ------------------------------------------------------------ EXPENSES
@@ -710,9 +742,18 @@ VIEWS.accounts = async () => {
         <div class="bar"><div style="width:${(x.total / sum.byClient[0].total) * 100}%"></div></div></div>`).join('') : '<div class="empty">No income this month.</div>'}
         <div class="sub" style="margin-top:12px">Meta ads: ${rs(sum.ads.total)} over ${sum.ads.activeDays} days${sum.ads.costPerLead ? ` · ${rs(sum.ads.costPerLead)} per new lead` : ''} · New leads ${sum.leads.new_leads} · Demos ${sum.leads.demos} · Won ${sum.leads.won}</div></div></div>
     </div>
+    <div class="card" style="margin-top:12px"><div class="ch">📣 Meta ads — is it paying off?</div><div class="cb">
+      <div class="tiles" style="margin-bottom:8px">
+        <div class="tile red"><div class="l">Spent · ${monthShort(c.month)}</div><div class="n">${rs(sum.ads.total)}</div></div>
+        <div class="tile green"><div class="l">Earned from Meta clients · ${monthShort(c.month)}</div><div class="n">${rs(sum.ads.earned)}</div><div class="s">${sum.ads.earnedPayments} payment(s)${sum.ads.earnedPending ? ` · ${rs(sum.ads.earnedPending)} pending` : ''}</div></div>
+        <div class="tile ${sum.ads.net >= 0 ? 'green' : 'red'}"><div class="l">Return · ${monthShort(c.month)}</div><div class="n">${sum.ads.roas != null ? sum.ads.roas.toFixed(1) + 'x' : '—'}</div><div class="s">${sum.ads.net >= 0 ? 'gain' : 'loss'} ${rs(Math.abs(sum.ads.net))}</div></div>
+        <div class="tile"><div class="l">All time</div><div class="n">${sum.ads.roasAllTime != null ? sum.ads.roasAllTime.toFixed(1) + 'x' : '—'}</div><div class="s">${rsK(sum.ads.spentAllTime)} spent → ${rsK(sum.ads.earnedAllTime)} earned</div></div></div>
+      ${sum.ads.clients.length ? `<div class="sub" style="margin-bottom:6px">Customers from Meta ads this month</div>${sum.ads.clients.map((x) => `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--line)"><span>${esc(x.client)}</span><b>${rs(x.total)}</b></div>`).join('')}` : '<div class="sub">No payments marked "came from Meta ads" this month. Tick the box when adding a payment.</div>'}
+    </div></div>
     <div class="card" style="margin-top:12px"><div class="ch">Month by month</div><div class="tscroll"><table>
-      <tr><th>Month</th><th class="num">Income</th><th class="num">Expenses</th><th class="num">Profit</th></tr>
-      ${[...sum.months].reverse().map((m) => `<tr class="row" data-m="${m.month}"><td>${monthLabel(m.month)}</td><td class="num">${rs(m.income)}</td><td class="num">${rs(m.expenses)}</td><td class="num ${m.profit >= 0 ? 'good' : 'bad'}">${rs(m.profit)}</td></tr>`).join('')}
+      <tr><th>Month</th><th class="num">Income</th><th class="num">Expenses</th><th class="num">Profit</th><th class="num">Meta spent</th><th class="num">Meta earned</th><th class="num">Return</th></tr>
+      ${[...sum.months].reverse().map((m) => `<tr class="row" data-m="${m.month}"><td>${monthLabel(m.month)}</td><td class="num">${rs(m.income)}</td><td class="num">${rs(m.expenses)}</td><td class="num ${m.profit >= 0 ? 'good' : 'bad'}">${rs(m.profit)}</td>
+        <td class="num">${m.metaSpend ? rs(m.metaSpend) : '—'}</td><td class="num">${m.metaIncome ? rs(m.metaIncome) : '—'}</td><td class="num ${m.metaSpend && m.metaIncome >= m.metaSpend ? 'good' : m.metaSpend ? 'bad' : ''}">${m.metaSpend ? (m.metaIncome / m.metaSpend).toFixed(1) + 'x' : '—'}</td></tr>`).join('')}
     </table></div></div>`;
   bindMonth(VIEWS.accounts);
   $$('tr[data-m]').forEach((tr) => (tr.onclick = () => { S.month = tr.dataset.m; VIEWS.accounts(); }));
