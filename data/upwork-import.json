@@ -1,6 +1,6 @@
 {
  "source": "Upwork account of Mian Talha Sarfraz, read through Claude's Upwork connector",
- "fetched_at": "2026-11-25T21:08:10Z",
+ "fetched_at": "2026-11-25T21:20:00Z",
  "connects_balance": 3,
  "available_balance_usd": 0.0,
  "contracts": [
@@ -939,6 +939,56 @@
    "connects_bid": null,
    "status": "Archived",
    "viewed": false
+  }
+ ],
+ "withdrawals": [
+  {
+   "ref": "955547989",
+   "date": "2026-09-30",
+   "amount": 178.0,
+   "to": "Payoneer"
+  },
+  {
+   "ref": "953820116",
+   "date": "2026-09-23",
+   "amount": 166.5,
+   "to": "Payoneer"
+  },
+  {
+   "ref": "953788296",
+   "date": "2026-09-23",
+   "amount": 5.0,
+   "to": "Payoneer"
+  },
+  {
+   "ref": "882838985",
+   "date": "2026-01-13",
+   "amount": 74.61,
+   "to": "Bank"
+  },
+  {
+   "ref": "879797760",
+   "date": "2026-01-05",
+   "amount": 89.01,
+   "to": "Bank"
+  },
+  {
+   "ref": "877790916",
+   "date": "2025-12-27",
+   "amount": 17.01,
+   "to": "Bank"
+  },
+  {
+   "ref": "877319828",
+   "date": "2025-12-23",
+   "amount": 8.01,
+   "to": "Bank"
+  },
+  {
+   "ref": "812402391",
+   "date": "2025-05-28",
+   "amount": 26.01,
+   "to": "Bank"
   }
  ]
 }

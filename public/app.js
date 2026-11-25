@@ -112,6 +112,7 @@ const NAV = [
   { id: 'leads', label: 'Leads', ic: '💬' },
   { id: 'projects', label: 'Projects', ic: '📁' },
   { id: 'upwork', label: 'Upwork', ic: '🟢' },
+  { id: 'payoneer', label: 'Payoneer', ic: '🟠' },
   { id: 'income', label: 'Income', ic: '💰' },
   { id: 'expenses', label: 'Expenses', ic: '🧾' },
   { id: 'subs', label: 'Subscriptions', ic: '🔁' },
@@ -129,8 +130,8 @@ function buildNav() {
   $('#bottomNav').innerHTML = BOTTOM.map((n) => `<a href="#${n.id === 'money' || n.id === 'more' ? '' : n.id}" data-b="${n.id}"><span class="ic">${n.ic}</span>${n.label}</a>`).join('');
   $$('#bottomNav a').forEach((a) => (a.onclick = (e) => {
     const b = a.dataset.b;
-    if (b === 'money') { e.preventDefault(); sheet('Money', [{ ic: '💰', label: 'Income', href: '#income' }, { ic: '🧾', label: 'Expenses', href: '#expenses' }, { ic: '📣', label: 'Add today\'s Meta ads spend', fn: () => quickAds() }, { ic: '🔁', label: 'Subscriptions', href: '#subs' }, { ic: '🟢', label: 'Upwork', href: '#upwork' }]); }
-    if (b === 'more') { e.preventDefault(); sheet('More', [{ ic: '📁', label: 'Projects', href: '#projects' }, { ic: '🟢', label: 'Upwork — Connects, proposals, earnings', href: '#upwork' }, { ic: '👥', label: 'Staff', href: '#staff' }, { ic: '🖥️', label: 'Apps on Render', href: '#apps' }, { ic: '⚙️', label: 'Settings', href: '#settings' }]); }
+    if (b === 'money') { e.preventDefault(); sheet('Money', [{ ic: '💰', label: 'Income', href: '#income' }, { ic: '🧾', label: 'Expenses', href: '#expenses' }, { ic: '📣', label: 'Add today\'s Meta ads spend', fn: () => quickAds() }, { ic: '🔁', label: 'Subscriptions', href: '#subs' }, { ic: '🟢', label: 'Upwork', href: '#upwork' }, { ic: '🟠', label: 'Payoneer', href: '#payoneer' }]); }
+    if (b === 'more') { e.preventDefault(); sheet('More', [{ ic: '📁', label: 'Projects', href: '#projects' }, { ic: '🟢', label: 'Upwork — Connects, proposals, earnings', href: '#upwork' }, { ic: '🟠', label: 'Payoneer — money in, withdrawals, balance', href: '#payoneer' }, { ic: '👥', label: 'Staff', href: '#staff' }, { ic: '🖥️', label: 'Apps on Render', href: '#apps' }, { ic: '⚙️', label: 'Settings', href: '#settings' }]); }
   }));
   $('#quickBtn').onclick = quickAdd;
 }
@@ -143,6 +144,7 @@ function quickAdd() {
     { ic: '📨', label: 'Upwork proposal sent', fn: () => proposalForm() },
     { ic: '🟢', label: 'Bought Upwork Connects', fn: () => buyConnects() },
     { ic: '📁', label: 'Project', fn: () => projectForm() },
+    { ic: '🟠', label: 'Payoneer: money received', fn: () => payoneerForm('in') },
   ]);
 }
 window.addEventListener('hashchange', route);
@@ -150,7 +152,7 @@ async function route() {
   const v = (location.hash.slice(1) || 'dashboard').split('?')[0];
   S.view = NAV.some((n) => n.id === v) ? v : 'dashboard';
   $$('#sideNav a').forEach((a) => a.classList.toggle('active', a.dataset.v === S.view));
-  const bmap = { income: 'money', expenses: 'money', subs: 'money', upwork: 'more', projects: 'more', staff: 'more', apps: 'more', settings: 'more' };
+  const bmap = { payoneer: 'money', income: 'money', expenses: 'money', subs: 'money', upwork: 'more', projects: 'more', staff: 'more', apps: 'more', settings: 'more' };
   $$('#bottomNav a').forEach((a) => a.classList.toggle('active', a.dataset.b === (bmap[S.view] || S.view)));
   closeDrawer(); destroyCharts();
   $('#pageTitle').textContent = NAV.find((n) => n.id === S.view).label;
@@ -732,6 +734,216 @@ async function proposalForm(p) {
     },
     onDelete: p && (async () => { await api('/api/proposals/' + p.id, { method: 'DELETE' }); toast('Deleted'); route(); }),
   });
+}
+
+
+// ------------------------------------------------------------ PAYONEER
+const PYN_IN = ['upwork', 'client', 'other_in'];
+const pynLabel = { upwork: 'From Upwork', client: 'Client payment', other_in: 'Other money in', withdrawal: 'Withdrawal to bank', fee: 'Payoneer fee', card: 'Card spend', other_out: 'Other money out' };
+const pynBadge = { upwork: 'b-good', client: 'b-info', other_in: 'b-info', withdrawal: 'b-warn', fee: 'b-bad', card: 'b-bad', other_out: 'b-mute' };
+const usd = (n) => '$' + (n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+VIEWS.payoneer = async () => {
+  actions(`<button class="btn light" id="pyImp">⬆ Upload statement (PDF / CSV)</button><button class="btn light" id="pyBal">Set balance</button>
+    <button class="btn light" id="pyOut">－ Withdrawal / fee</button><button class="btn main" id="pyIn">＋ Money received</button>
+    <input type="file" id="pyFile" accept=".csv,text/csv,.pdf,application/pdf" class="hidden" />`);
+  $('#pyIn').onclick = () => payoneerForm('in'); $('#pyOut').onclick = () => payoneerForm('out'); $('#pyBal').onclick = payoneerBalance;
+  $('#pyImp').onclick = () => $('#pyFile').click();
+  $('#pyFile').onchange = async () => {
+    const f = $('#pyFile').files[0]; $('#pyFile').value = ''; if (!f) return;
+    if (/\.pdf$/i.test(f.name) || f.type === 'application/pdf') {
+      toast('Reading statement…');
+      const b64 = await new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = no; r.readAsDataURL(f); });
+      try { const st = await api('/api/payoneer/read-pdf', { method: 'POST', body: { file: b64 } }); payoneerPreview(st.rows.map(pdfRowToItem), st); }
+      catch (e) { toast(e.message); }
+    } else payoneerCsvPreview(await f.text());
+  };
+  const R = S.pyRange || { mode: 'month' };
+  const today = todayStr();
+  const range = R.mode === 'year' ? { from: today.slice(0, 4) + '-01-01', to: today } : R.mode === '12m' ? { from: monthShift(thisMonth(), -11) + '-01', to: today }
+    : R.mode === 'all' ? { from: '2000-01-01', to: today } : R.mode === 'custom' ? { from: R.from, to: R.to } : null;
+  const periodName = R.mode === 'year' ? 'this year' : R.mode === '12m' ? 'last 12 months' : R.mode === 'all' ? 'all time' : R.mode === 'custom' ? `${fmtShort(R.from)} – ${fmtShort(R.to)}` : monthShort(S.month);
+  const d = await api('/api/payoneer?month=' + S.month + (range ? `&from=${range.from}&to=${range.to}` : ''));
+  const m = d.monthTotals, t = d.allTime, b = d.balance;
+  $('#view').innerHTML = `
+    <div class="toolbar"><div class="chips">${[['month', 'Month'], ['12m', 'Last 12 months'], ['year', 'This year'], ['all', 'All time'], ['custom', R.mode === 'custom' ? periodName : 'Custom…']].map(([k, l]) => `<button class="chip ${R.mode === k ? 'active' : ''}" data-pr="${k}">${l}</button>`).join('')}</div>
+      ${R.mode === 'month' ? monthPicker() : ''}</div>
+    ${R.stmt && R.mode === 'custom' ? `<div class="card cb" style="margin-bottom:12px">📄 Statement ${fmtDate(R.from)} – ${fmtDate(R.to)}${R.stmt.opening != null ? ` · opening ${usd(R.stmt.opening)}` : ''}${R.stmt.closing != null ? ` · closing ${usd(R.stmt.closing)}` : ''}${R.stmt.check ? ` · <span class="${R.stmt.check.ok ? 'good' : 'bad'}">${R.stmt.check.ok ? '✓ all transactions accounted for' : '⚠ difference of ' + usd(R.stmt.check.diff) + ' — some rows may be missing'}</span>` : ''}</div>` : ''}
+    <div class="tiles four">
+      <div class="tile click" id="pyBalTile"><div class="l">🟠 Payoneer balance</div><div class="n">${b.isSet ? usd(b.balance) : '—'}</div><div class="s">${b.isSet ? `set ${usd(b.setBalance)} on ${fmtShort(b.setAt)} · +${usd(b.inSince)} in · −${usd(b.outSince)} out` : 'tap to enter your balance'}</div></div>
+      <div class="tile green"><div class="l">Received · ${periodName}</div><div class="n">${usd(m.received.usd)}</div><div class="s">${rs(m.received.pkr)} · ${m.received.n} payment(s)</div></div>
+      <div class="tile"><div class="l">From Upwork / direct clients · ${periodName}</div><div class="n">${usd(m.fromUpwork.usd)} / ${usd(m.fromClients.usd)}</div></div>
+      <div class="tile red"><div class="l">Withdrawn to bank · ${periodName}</div><div class="n">${usd(m.withdrawn.usd)}</div><div class="s">${m.bankPkr ? rs(m.bankPkr) + ' reached the bank · ' : ''}fees ${usd(m.fees.usd)}</div></div>
+      <div class="tile green"><div class="l">Received through Payoneer · all time</div><div class="n">${usd(t.received.usd)}</div><div class="s">${rs(t.received.pkr)} · ${t.received.n} payment(s)</div></div>
+      <div class="tile"><div class="l">All time from Upwork</div><div class="n">${usd(t.fromUpwork.usd)}</div><div class="s">already counted in Upwork income</div></div>
+      <div class="tile"><div class="l">All time from direct clients</div><div class="n">${usd(t.fromClients.usd)}</div><div class="s">counted as income</div></div>
+      <div class="tile red"><div class="l">All time withdrawn · fees</div><div class="n">${usd(t.withdrawn.usd)}</div><div class="s">fees ${usd(t.fees.usd)}${t.bankPkr ? ' · ' + rs(t.bankPkr) + ' in bank' : ''}</div></div>
+    </div>
+    <div class="cols3">
+      <div class="card"><div class="ch">Money into Payoneer — last 12 months (USD)</div><div class="cb"><div class="chartbox"><canvas id="cPy"></canvas></div></div></div>
+      <div class="card"><div class="ch">Who paid you via Payoneer</div><div class="cb">${d.senders.length ? d.senders.map((x) => `
+        <div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between"><span>${esc(x.who)} <span class="sub">(${x.n})</span></span><b>${usd(x.usd)}</b></div>
+        <div class="bar"><div style="width:${(x.usd / d.senders[0].usd) * 100}%;background:#ff4800"></div></div></div>`).join('') : '<div class="sub">Nothing yet.</div>'}</div></div>
+    </div>
+    <div class="card list" style="margin-top:12px"><div class="ch">Transactions · ${R.mode === 'month' ? monthLabel(S.month) : periodName}</div>${d.rows.length ? d.rows.map((r, i) => `
+      <div class="li" data-py="${i}"><div class="grow"><div class="t">${esc(r.counterparty || pynLabel[r.kind])} <span class="badge ${pynBadge[r.kind]}" style="font-size:11px">${pynLabel[r.kind]}</span>${r.income_id ? ' <span class="sub">· in Income</span>' : ''}</div>
+        <div class="sub">${fmtDate(r.date)}${r.description ? ' · ' + esc(r.description) : ''}</div></div>
+        <div style="text-align:right"><div class="amt ${PYN_IN.includes(r.kind) ? 'good' : 'bad'}">${PYN_IN.includes(r.kind) ? '+' : '−'}${cur(r.amount, r.currency)}</div>
+        <div class="sub">${r.kind === 'withdrawal' && r.pkr_received ? rs(r.pkr_received) + ' in bank' : r.currency !== 'PKR' ? rs(r.amount_pkr) : ''}</div></div></div>`).join('')
+      : '<div class="empty">No Payoneer activity this month. Add payments as they arrive, or import the CSV from Payoneer → Activity → Transactions → Export.</div>'}</div>`;
+  bindMonth(VIEWS.payoneer);
+  $$('[data-pr]').forEach((c) => (c.onclick = () => {
+    const k = c.dataset.pr;
+    if (k !== 'custom') { S.pyRange = { mode: k }; return VIEWS.payoneer(); }
+    openForm({ title: 'Choose period', submit: 'Show', fields: [{ name: 'from', label: 'From', type: 'date', value: R.from || thisMonth() + '-01', required: true }, { name: 'to', label: 'To', type: 'date', value: R.to || todayStr(), required: true }],
+      onSubmit: async (v) => { S.pyRange = { mode: 'custom', from: v.from, to: v.to }; VIEWS.payoneer(); } });
+  }));
+  $('#pyBalTile').onclick = payoneerBalance;
+  $$('[data-py]').forEach((el) => (el.onclick = () => payoneerForm(null, d.rows[+el.dataset.py])));
+  const draw = () => chart($('#cPy'), { type: 'bar', data: { labels: d.series.map((s) => monthShort(s.month)), datasets: [
+    { label: 'From Upwork', data: d.series.map((s) => s.fromUpwork), backgroundColor: '#14a800', stack: 'in', borderRadius: 3 },
+    { label: 'From clients', data: d.series.map((s) => s.fromClients), backgroundColor: '#ff4800', stack: 'in', borderRadius: 3 },
+    { label: 'Withdrawn', data: d.series.map((s) => s.withdrawn), backgroundColor: BLUE, stack: 'out', borderRadius: 3 }] },
+    options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: (x) => `${x.dataset.label}: ${usd(x.raw)}` } } }, scales: { y: { ticks: { callback: (v) => '$' + v } } } } });
+  if (window.Chart) draw(); else window.addEventListener('load', draw, { once: true });
+};
+function payoneerBalance() {
+  openForm({ title: '🟠 Payoneer balance', submit: 'Save',
+    extra: '<div class="sub">Type the USD balance shown in Payoneer now. New entries you add after this move it up or down automatically.</div>',
+    fields: [{ name: 'balance', label: 'Balance (USD)', type: 'number', required: true }],
+    onSubmit: async (v) => { await api('/api/payoneer/balance', { method: 'PUT', body: v }); toast('Balance saved'); route(); } });
+}
+function payoneerForm(dir, r) {
+  const isIn = r ? PYN_IN.includes(r.kind) : dir === 'in';
+  const kinds = isIn ? ['client', 'upwork', 'other_in'] : ['withdrawal', 'fee', 'card', 'other_out'];
+  const f = openForm({
+    title: r ? 'Edit Payoneer entry' : isIn ? '🟠 Money received in Payoneer' : '🟠 Money out of Payoneer', submit: r ? 'Save' : 'Add',
+    fields: [
+      { name: 'kind', label: 'Type', type: 'select', options: kinds.map((k) => [k, pynLabel[k]]), value: r?.kind || kinds[0] },
+      { name: 'amount', label: 'Amount', type: 'number', required: true, value: r?.amount },
+      { name: 'currency', label: 'Currency', type: 'select', options: S.fin.currencies, value: r?.currency || 'USD' },
+      { name: 'date', label: 'Date', type: 'date', value: r?.date || todayStr() },
+      { name: 'counterparty', label: isIn ? 'From (client / platform)' : 'To (bank / merchant)', value: r?.counterparty || '', placeholder: isIn ? 'e.g. Acme Ltd, Fiverr' : 'e.g. Meezan Bank' },
+      ...(isIn ? [] : [{ name: 'pkr_received', label: 'Rupees that reached your bank (for withdrawals)', type: 'number', value: r?.pkr_received || '' }]),
+      { name: 'description', label: 'Details', value: r?.description || '', placeholder: isIn ? 'project / invoice' : '' },
+      ...(!r && isIn ? [{ name: 'add_income', label: 'Also add to Income (direct client payment that isn\'t recorded yet)', type: 'checkbox', value: true },
+                         { name: 'source', label: 'Income source', value: 'Direct international', list: ['Direct international', 'Fiverr', 'Referral', 'Meta ads', 'Local client'] }] : []),
+      { name: 'rate', label: 'Rate to PKR', type: 'number', value: r && r.currency !== 'PKR' ? r.rate : '', placeholder: 'auto from Settings' },
+    ],
+    onSubmit: async (v) => {
+      if (v.add_income !== undefined && v.kind !== 'client') v.add_income = false;
+      if (r) await api('/api/payoneer/' + r.id, { method: 'PATCH', body: v }); else await api('/api/payoneer', { method: 'POST', body: v });
+      toast('Saved'); route();
+    },
+    onDelete: r && (async () => { await api('/api/payoneer/' + r.id, { method: 'DELETE' }); toast('Deleted'); route(); }),
+  });
+  if (!r && isIn) f.elements.kind.addEventListener('change', () => { f.elements.add_income.checked = f.elements.kind.value === 'client'; });
+}
+// ---- Payoneer CSV: parse, auto-classify, let you fix, then import
+function parseCsv(text) {
+  const rows = []; let row = [], val = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"' && text[i + 1] === '"') { val += '"'; i++; } else if (c === '"') q = false; else val += c; }
+    else if (c === '"') q = true;
+    else if (c === ',' || c === ';' || c === '\t') { row.push(val); val = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(val); rows.push(row); row = []; val = ''; }
+    else val += c;
+  }
+  if (val || row.length) { row.push(val); rows.push(row); }
+  return rows.filter((r) => r.some((x) => x.trim()));
+}
+function toISODate(s) {
+  s = String(s || '').trim(); if (!s) return null;
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/);
+  if (m) { let [, a, b, y] = m; if (y.length === 2) y = '20' + y; let mo = +a, da = +b; if (mo > 12) [mo, da] = [da, mo]; return `${y}-${String(mo).padStart(2, '0')}-${String(da).padStart(2, '0')}`; }
+  const d = new Date(s); return isNaN(d) ? null : d.toLocaleDateString('en-CA');
+}
+const num = (s) => { if (s == null) return NaN; const t = String(s).replace(/[^\d.,\-()]/g, ''); const neg = /^\(.*\)$/.test(t) || t.includes('-'); const n = parseFloat(t.replace(/[(),\-]/g, '').replace(/,(?=\d{3})/g, '')); return neg ? -n : n; };
+function payoneerCsvPreview(text) {
+  const rows = parseCsv(text);
+  const hi = rows.findIndex((r) => r.some((c) => /date/i.test(c)) && r.some((c) => /amount|credit|debit/i.test(c)));
+  if (hi < 0) return toast('Could not find Date / Amount columns in this CSV');
+  const H = rows[hi].map((h) => h.trim().toLowerCase());
+  const col = (...res) => H.findIndex((h) => res.some((re) => re.test(h)));
+  const cDate = col(/date/), cDesc = col(/desc/, /detail/, /memo/, /^transaction$/, /type/), cAmt = col(/^amount/, /net/, /amount/), cCred = col(/credit/, /^in$/), cDeb = col(/debit/, /^out$/),
+    cCur = col(/currency/), cStat = col(/status/), cId = col(/transaction id/, /reference/, /^id$/), cFrom = col(/from/, /payer/, /sender/, /counterparty/, /name/);
+  const items = rows.slice(hi + 1).map((r, i) => {
+    const date = toISODate(r[cDate]);
+    let amt = cCred >= 0 || cDeb >= 0 ? (num(r[cCred]) || 0) - Math.abs(num(r[cDeb]) || 0) : num(r[cAmt]);
+    if (!date || !amt || isNaN(amt)) return null;
+    const desc = (r[cDesc] || '').trim(), from = cFrom >= 0 ? (r[cFrom] || '').trim() : '';
+    const text2 = `${desc} ${from}`;
+    const kind = classifyPyn(amt, text2);
+    const status = cStat >= 0 ? (r[cStat] || '') : '';
+    const counterparty = from || pynCounterparty(desc, kind);
+    return { i, include: !/cancel|fail|declin|revers|pending/i.test(status), date, kind, amount: Math.abs(amt), currency: (r[cCur] || 'USD').trim().toUpperCase().slice(0, 3) || 'USD',
+      description: desc, counterparty, ext_ref: cId >= 0 && r[cId] ? 'pyn:' + r[cId].trim() : null };
+  }).filter(Boolean);
+  payoneerPreview(items);
+}
+
+function classifyPyn(amt, text) {
+  if (amt > 0) return /upwork/i.test(text) ? 'upwork' : /refund|reversal|cashback/i.test(text) ? 'other_in' : 'client';
+  return /fee|charge|commission/i.test(text) ? 'fee' : /withdraw|bank|transfer to|payout/i.test(text) ? 'withdrawal' : /card|purchase|pos|atm|merchant/i.test(text) ? 'card' : 'other_out';
+}
+function pynCounterparty(desc, kind) {
+  if (kind === 'upwork') return 'Upwork';
+  const m = desc.match(/(?:payment from|received from|transfer from|from)\s+(.+?)(?:\s*[-–(]|$)/i) || desc.match(/(?:withdrawal to|transfer to|to)\s+(.+?)(?:\s*[-–(]|$)/i) || desc.match(/(?:purchase|card purchase)\s*[-–:]?\s*(.+?)$/i);
+  return m ? m[1].trim() : '';
+}
+function pdfRowToItem(r, i) {
+  const kind = classifyPyn(r.amount, r.description);
+  return { i, include: !/cancel|fail|declin|revers|pending/i.test(r.status || ''), date: r.date, kind, amount: Math.abs(r.amount), currency: r.currency || 'USD',
+    description: r.description, counterparty: pynCounterparty(r.description, kind), ext_ref: null };
+}
+function payoneerPreview(items, st = {}) {
+  if (!items.length) return toast('No transactions found in this statement' + (st.columns ? '' : ' — send it to Claude to tune the reader'));
+  const kinds = Object.keys(pynLabel);
+  const net = () => items.filter((x) => x.include && x.currency === 'USD').reduce((s, x) => s + (PYN_IN.includes(x.kind) ? x.amount : -x.amount), 0);
+  const dates = items.map((x) => x.date).sort();
+  const from = st.from || dates[0], to = st.to || dates[dates.length - 1];
+  const summary = () => {
+    const inc = items.filter((x) => x.include);
+    const s = (ks) => inc.filter((x) => ks.includes(x.kind)).reduce((a, x) => a + x.amount, 0);
+    const check = st.opening != null && st.closing != null ? Math.round((st.opening + net() - st.closing) * 100) / 100 : null;
+    return `<div class="tiles" style="margin:6px 0">
+      <div class="tile green"><div class="l">Money in</div><div class="n">${usd(s(PYN_IN))}</div><div class="s">Upwork ${usd(s(['upwork']))} · clients ${usd(s(['client', 'other_in']))}</div></div>
+      <div class="tile red"><div class="l">Withdrawn</div><div class="n">${usd(s(['withdrawal']))}</div></div>
+      <div class="tile red"><div class="l">Fees + card</div><div class="n">${usd(s(['fee', 'card', 'other_out']))}</div></div>
+      ${check != null ? `<div class="tile ${check === 0 ? 'green' : 'red'}"><div class="l">Statement check</div><div class="n">${check === 0 ? '✓ matches' : usd(check) + ' off'}</div><div class="s">opening ${usd(st.opening)} → closing ${usd(st.closing)}</div></div>` : ''}</div>`;
+  };
+  $('#modalRoot').innerHTML = `<div class="modal"><div class="box" style="width:min(940px,100%)">
+    <h2>${st.pages ? 'Payoneer statement' : 'Payoneer CSV'} · ${items.length} transactions</h2>
+    <div class="sub">${fmtDate(from)} – ${fmtDate(to)}. Check the type of each row. <b>Client payment</b> rows are also added to Income; <b>From Upwork</b> rows are not (already counted in Upwork income). Rows already in the app are skipped automatically.</div>
+    <div id="pySum">${summary()}</div>
+    <div class="tscroll" style="max-height:48vh;overflow:auto"><table><tr><th></th><th>Date</th><th>Details</th><th class="num">Amount</th><th>Type</th></tr>
+      ${items.map((x, k) => `<tr><td><input type="checkbox" data-inc="${k}" ${x.include ? 'checked' : ''}/></td><td style="white-space:nowrap">${fmtShort(x.date)}</td>
+        <td><div>${esc(x.counterparty || '')}</div><div class="sub">${esc(x.description)}</div></td>
+        <td class="num ${PYN_IN.includes(x.kind) ? 'good' : 'bad'}" data-amt="${k}">${PYN_IN.includes(x.kind) ? '+' : '−'}${cur(x.amount, x.currency)}</td>
+        <td><select data-kind="${k}" class="inp">${kinds.map((kk) => `<option value="${kk}" ${kk === x.kind ? 'selected' : ''}>${pynLabel[kk]}</option>`).join('')}</select></td></tr>`).join('')}
+    </table></div>
+    <div class="mact"><button class="btn light" id="mCancel">Cancel</button><button class="btn main" id="pyGo">Import & show this period</button></div></div></div>`;
+  $('#mCancel').onclick = closeModal;
+  const refresh = () => { $('#pySum').innerHTML = summary(); };
+  $$('[data-inc]').forEach((c) => (c.onchange = () => { items[+c.dataset.inc].include = c.checked; refresh(); }));
+  $$('[data-kind]').forEach((s) => (s.onchange = () => {
+    const x = items[+s.dataset.kind]; x.kind = s.value;
+    const cell = $(`[data-amt="${s.dataset.kind}"]`); cell.className = 'num ' + (PYN_IN.includes(x.kind) ? 'good' : 'bad'); cell.textContent = (PYN_IN.includes(x.kind) ? '+' : '−') + cur(x.amount, x.currency); refresh();
+  }));
+  $('#pyGo').onclick = async () => {
+    $('#pyGo').disabled = true;
+    try {
+      const r = await api('/api/payoneer/import', { method: 'POST', body: { rows: items } });
+      const check = st.opening != null && st.closing != null ? { ok: Math.abs(st.opening + net() - st.closing) < 0.01, diff: Math.round((st.opening + net() - st.closing) * 100) / 100 } : null;
+      if (st.closing != null) {
+        const cur0 = await api('/api/payoneer?month=' + thisMonth()).then((x) => x.balance).catch(() => ({}));
+        if (!cur0.isSet || to >= String(cur0.setAt).slice(0, 10)) await api('/api/payoneer/balance', { method: 'PUT', body: { balance: st.closing } });
+      }
+      S.pyRange = { mode: 'custom', from, to, stmt: { opening: st.opening, closing: st.closing, check } };
+      closeModal(); toast(`Imported ${r.added} · ${r.skipped} already there / skipped`); location.hash = 'payoneer'; VIEWS.payoneer();
+    } catch (e) { toast(e.message); $('#pyGo').disabled = false; }
+  };
 }
 
 // ------------------------------------------------------------ INCOME

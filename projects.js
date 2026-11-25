@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const IMPORT_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'data', 'upwork-import.json');
 
-export async function setupProjects(app, pool, { APP_TZ = 'Asia/Karachi' } = {}) {
+export async function setupProjects(app, pool, { APP_TZ = 'Asia/Karachi', payoneer = null } = {}) {
   const all = async (sql, p = []) => (await pool.query(sql, p)).rows;
   const one = async (sql, p = []) => (await pool.query(sql, p)).rows[0];
   const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
@@ -177,6 +177,13 @@ export async function setupProjects(app, pool, { APP_TZ = 'Asia/Karachi' } = {})
         VALUES ($1,$2,'Upwork','Connects','Upwork',$3,$4,'USD',$5,$6,$7,$2::date) ON CONFLICT (ext_ref) DO NOTHING RETURNING id`,
         [`upwork:tx:${c.ref}`, c.date, `${c.qty} connects`, c.amount, rate, pkr(c.amount), c.qty]);
       if (r) counts.connects++;
+    }
+    // Upwork → Payoneer withdrawals: money arriving in Payoneer (a transfer, not new income)
+    for (const w of d.withdrawals || []) {
+      if (w.to !== 'Payoneer' || !payoneer) continue;
+      const r = await payoneer.addTx({ date: w.date, kind: 'upwork', counterparty: 'Upwork', description: `Withdrawal from Upwork ($${w.amount.toFixed(2)})`,
+        amount: w.amount, currency: 'USD', ext_ref: `upwork:tx:${w.ref}`, historic: true });
+      if (r) counts.payoneer = (counts.payoneer || 0) + 1;
     }
     const stMap = { Accepted: null, Hired: 'hired', Offered: 'interview', Declined: 'declined', Withdrawn: 'archived', Archived: 'archived' };
     for (const p of d.proposals || []) {

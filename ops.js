@@ -194,6 +194,7 @@ export async function setupOps(app, pool, { APP_TZ = 'Asia/Karachi', RENDER_API_
       all(`SELECT name, next_due, amount::float, currency FROM subscriptions WHERE active AND $1::date IS NOT NULL AND next_due <= ($2::date + 14) ORDER BY next_due`, p),
       all(`SELECT name, url, last_status, last_ms, last_checked, down_since, last_error FROM monitors WHERE active ORDER BY kind, name`),
     ]);
+    const pyn = await all(`SELECT kind, SUM(amount)::float usd, SUM(amount_pkr)::float pkr, COUNT(*)::int n FROM payoneer_tx WHERE date BETWEEN $1 AND $2 GROUP BY kind`, p).catch(() => []);
     const [upEarned, upSpent, projOngoing, projDone, props] = await Promise.all([
       one(`SELECT COALESCE(SUM(i.amount_pkr),0)::float pkr, COUNT(*)::int n FROM income i LEFT JOIN projects p ON p.id=i.project_id
            WHERE (i.source ILIKE 'upwork%' OR p.platform='Upwork') AND i.status='received' AND i.date BETWEEN $1 AND $2`, p),
@@ -210,7 +211,7 @@ export async function setupOps(app, pool, { APP_TZ = 'Asia/Karachi', RENDER_API_
     const expenses = expRows.reduce((s, x) => s + x.amount_pkr, 0);
     const adsTotal = ads.reduce((s, x) => s + x.pkr, 0);
     const metaEarned = incomeRows.filter((x) => x.from_meta && x.status === 'received').reduce((s, x) => s + x.amount_pkr, 0);
-    return { props, upEarned, upSpent, projOngoing, projDone, metaEarned, period, range: r, income, expenses, profit: income - expenses, pendingInc, incomeRows, expRows, byCat, ads, adsTotal,
+    return { pyn, props, upEarned, upSpent, projOngoing, projDone, metaEarned, period, range: r, income, expenses, profit: income - expenses, pendingInc, incomeRows, expRows, byCat, ads, adsTotal,
       newLeads, contacted, demos, calls, fuDone, fuOpen, won, lost, salaries, subsPaid, subsUpcoming, monitors };
   }
 
@@ -331,6 +332,11 @@ export async function setupOps(app, pool, { APP_TZ = 'Asia/Karachi', RENDER_API_
       (d.props.length ? `   ·   Win rate: ${Math.round((hired / d.props.length) * 100)}%` : ''), X).moveDown(0.3);
     table([{ h: 'Date', w: 0.15 }, { h: 'Job', w: 0.5 }, { h: 'Connects', w: 0.12, a: 'right' }, { h: 'Status', w: 0.23 }],
       d.props.map((x) => [fmtD(x.date), x.job_title, String(x.connects), x.status]));
+
+    section('Payoneer');
+    const pk = (ks) => d.pyn.filter((x) => ks.includes(x.kind)).reduce((s, x) => s + x.usd, 0);
+    if (!d.pyn.length) empty('No Payoneer activity in this period.');
+    else doc.font('Helvetica').fontSize(10).fill(INK).text(`Received: $${pk(['upwork', 'client', 'other_in']).toFixed(2)} (from Upwork $${pk(['upwork']).toFixed(2)}, from clients $${pk(['client', 'other_in']).toFixed(2)})   ·   Withdrawn to bank: $${pk(['withdrawal']).toFixed(2)}   ·   Fees: $${pk(['fee']).toFixed(2)}`, X).moveDown(0.3);
 
     section('Income');
     if (!d.incomeRows.length) empty('No income recorded in this period.');

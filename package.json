@@ -1,7 +1,7 @@
 {
   "name": "pokitbio-app",
   "version": "1.0.0",
-  "description": "PokitBio business app \u2014 leads (Messenger + Instagram), demos & calls, income, expenses, Meta ads, subscriptions, staff, accounts, PDF reports, Render monitor",
+  "description": "PokitBio business app — leads (Messenger + Instagram), demos & calls, income, expenses, Meta ads, subscriptions, staff, accounts, PDF reports, Render monitor",
   "main": "server.js",
   "type": "module",
   "scripts": {
@@ -15,6 +15,7 @@
     "chart.js": "^4.4.4",
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
+    "pdfjs-dist": "^4.10.38",
     "pdfkit": "^0.15.2",
     "pg": "^8.23.1"
   }
