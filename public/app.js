@@ -34,6 +34,7 @@ const fmtDT = (v) => (v ? new Date(v).toLocaleString('en-GB', { day: 'numeric', 
 const monthLabel = (m) => new Date(m + '-15T12:00:00').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
 const monthShort = (m) => new Date(m + '-15T12:00:00').toLocaleDateString('en-GB', { month: 'short' });
 const rs = (n) => 'Rs ' + Math.round(n || 0).toLocaleString('en-PK');
+const axisK = (v) => { const a = Math.abs(v); const t = (n) => String(+n.toFixed(1)); return (v < 0 ? '-' : '') + (a >= 1e6 ? t(a / 1e6) + 'M' : a >= 1e4 ? Math.round(a / 1e3) + 'k' : a >= 1e3 ? t(a / 1e3) + 'k' : Math.round(a)); };
 const rsK = (n) => { const a = Math.abs(n || 0); const s = n < 0 ? '-' : ''; return a >= 1e6 ? `${s}Rs ${(a / 1e6).toFixed(2)}M` : a >= 1e5 ? `${s}Rs ${(a / 1e3).toFixed(0)}k` : rs(n); };
 const cur = (amount, c) => (c === 'PKR' ? rs(amount) : `${{ USD: '$', EUR: '€', GBP: '£', AUD: 'A$', AED: 'AED ' }[c] || c + ' '}${Number(amount).toLocaleString(undefined, { maximumFractionDigits: 2 })}`);
 function rel(iso) {
@@ -114,33 +115,85 @@ function sheet(title, links) {
 }
 
 // ------------------------------------------------------------ navigation
+// line icons (stroke) — one visual language across the app
+const IC = {
+  dashboard: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+  leads: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h5"/>',
+  projects: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  upwork: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/>',
+  payoneer: '<path d="M20 7H5a2 2 0 0 1 0-4h13v4"/><path d="M3 5v14a2 2 0 0 0 2 2h15V7"/><circle cx="16" cy="14" r="1.5"/>',
+  income: '<path d="M12 3v14M6 11l6 6 6-6"/><path d="M4 21h16"/>',
+  expenses: '<path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
+  subs: '<path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>',
+  staff: '<circle cx="9" cy="8" r="3.5"/><path d="M2 21a7 7 0 0 1 14 0"/><circle cx="17.5" cy="9" r="2.5"/><path d="M22 20a5 5 0 0 0-6-4.8"/>',
+  accounts: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 6-7"/>',
+  apps: '<rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><path d="M7 7h.01M7 17h.01"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  money: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>',
+  more: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
+};
+const svg = (k) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${IC[k] || ''}</svg>`;
 const NAV = [
-  { id: 'dashboard', label: 'Dashboard', ic: '🏠' },
-  { id: 'leads', label: 'Leads', ic: '💬' },
-  { id: 'projects', label: 'Projects', ic: '📁' },
-  { id: 'upwork', label: 'Upwork', ic: '🟢' },
-  { id: 'payoneer', label: 'Payoneer', ic: '🟠' },
-  { id: 'income', label: 'Income', ic: '💰' },
-  { id: 'expenses', label: 'Expenses', ic: '🧾' },
-  { id: 'subs', label: 'Subscriptions', ic: '🔁' },
-  { id: 'staff', label: 'Staff', ic: '👥' },
-  { id: 'accounts', label: 'Accounts & reports', ic: '📊' },
-  { id: 'apps', label: 'Apps on Render', ic: '🖥️' },
-  { id: 'settings', label: 'Settings', ic: '⚙️' },
+  { id: 'dashboard', label: 'Dashboard', grp: 'Overview' },
+  { id: 'accounts', label: 'Accounts & reports', grp: 'Overview' },
+  { id: 'leads', label: 'Leads', grp: 'Sales' },
+  { id: 'projects', label: 'Projects', grp: 'Sales' },
+  { id: 'upwork', label: 'Upwork', grp: 'Sales' },
+  { id: 'income', label: 'Income', grp: 'Money' },
+  { id: 'expenses', label: 'Expenses', grp: 'Money' },
+  { id: 'payoneer', label: 'Payoneer', grp: 'Money' },
+  { id: 'subs', label: 'Subscriptions', grp: 'Money' },
+  { id: 'staff', label: 'Staff', grp: 'Team' },
+  { id: 'apps', label: 'Apps on Render', grp: 'System' },
+  { id: 'settings', label: 'Settings', grp: 'System' },
 ];
 const BOTTOM = [
-  { id: 'dashboard', label: 'Home', ic: '🏠' }, { id: 'leads', label: 'Leads', ic: '💬' },
-  { id: 'money', label: 'Money', ic: '💰' }, { id: 'accounts', label: 'Reports', ic: '📊' }, { id: 'more', label: 'More', ic: '☰' },
+  { id: 'dashboard', label: 'Home', ic: 'dashboard' }, { id: 'leads', label: 'Leads', ic: 'leads' },
+  { id: 'money', label: 'Money', ic: 'money' }, { id: 'accounts', label: 'Reports', ic: 'accounts' }, { id: 'more', label: 'More', ic: 'more' },
 ];
 function buildNav() {
-  $('#sideNav').innerHTML = NAV.map((n) => `<a class="nav" href="#${n.id}" data-v="${n.id}"><span class="ic">${n.ic}</span>${n.label}</a>`).join('');
-  $('#bottomNav').innerHTML = BOTTOM.map((n) => `<a href="#${n.id === 'money' || n.id === 'more' ? '' : n.id}" data-b="${n.id}"><span class="ic">${n.ic}</span>${n.label}</a>`).join('');
+  let last = '';
+  $('#sideNav').innerHTML = NAV.map((n) => {
+    const g = n.grp !== last ? `<div class="grp">${n.grp}</div>` : ''; last = n.grp;
+    return `${g}<a class="nav" href="#${n.id}" data-v="${n.id}">${svg(n.id)}<span>${n.label}</span>${n.id === 'leads' ? '<span class="cnt hidden" id="navLeadsN"></span>' : ''}</a>`;
+  }).join('');
+  $('#bottomNav').innerHTML = BOTTOM.map((n) => `<a href="#${n.id === 'money' || n.id === 'more' ? '' : n.id}" data-b="${n.id}">${svg(n.ic)}${n.label}</a>`).join('');
   $$('#bottomNav a').forEach((a) => (a.onclick = (e) => {
     const b = a.dataset.b;
-    if (b === 'money') { e.preventDefault(); sheet('Money', [{ ic: '💰', label: 'Income', href: '#income' }, { ic: '🧾', label: 'Expenses', href: '#expenses' }, { ic: '📣', label: 'Add today\'s Meta ads spend', fn: () => quickAds() }, { ic: '🔁', label: 'Subscriptions', href: '#subs' }, { ic: '🟢', label: 'Upwork', href: '#upwork' }, { ic: '🟠', label: 'Payoneer', href: '#payoneer' }]); }
-    if (b === 'more') { e.preventDefault(); sheet('More', [{ ic: '📁', label: 'Projects', href: '#projects' }, { ic: '🟢', label: 'Upwork — Connects, proposals, earnings', href: '#upwork' }, { ic: '🟠', label: 'Payoneer — money in, withdrawals, balance', href: '#payoneer' }, { ic: '👥', label: 'Staff', href: '#staff' }, { ic: '🖥️', label: 'Apps on Render', href: '#apps' }, { ic: '⚙️', label: 'Settings', href: '#settings' }]); }
+    if (b === 'money') { e.preventDefault(); sheet('Money', [{ ic: svg('income'), label: 'Income', href: '#income' }, { ic: svg('expenses'), label: 'Expenses', href: '#expenses' }, { ic: '📣', label: 'Add today\'s Meta ads spend', fn: () => quickAds() }, { ic: svg('payoneer'), label: 'Payoneer', href: '#payoneer' }, { ic: svg('subs'), label: 'Subscriptions', href: '#subs' }]); }
+    if (b === 'more') { e.preventDefault(); sheet('More', [{ ic: svg('projects'), label: 'Projects', href: '#projects' }, { ic: svg('upwork'), label: 'Upwork', href: '#upwork' }, { ic: svg('staff'), label: 'Staff', href: '#staff' }, { ic: svg('apps'), label: 'Apps on Render', href: '#apps' }, { ic: svg('settings'), label: 'Settings', href: '#settings' }]); }
   }));
   $('#quickBtn').onclick = quickAdd;
+  $('#newBtn').onclick = quickAdd;
+  // global search → Leads list filtered
+  const gs = $('#gSearch');
+  gs.onkeydown = (e) => { if (e.key === 'Enter') { S.lq = gs.value.trim(); S.leadTab = 'list'; if (S.view === 'leads') VIEWS.leads(); else location.hash = 'leads'; } };
+  const goDue = () => { S.leadTab = 'followups'; if (S.view === 'leads') VIEWS.leads(); else location.hash = 'leads'; };
+  $('#bellBtn').onclick = goDue; $('#bellBtnM').onclick = goDue;
+  $('#pulse').onclick = goDue;
+  refreshPulse(); setInterval(() => { if (!document.hidden) refreshPulse(); }, 60000);
+}
+// live "Today" panel + bell count
+async function refreshPulse() {
+  try {
+    const [fu, st, mon, inc] = await Promise.all([api('/api/followups'), api('/api/stats'), api('/api/monitors').catch(() => ({ monitors: [] })), api('/api/income?month=' + thisMonth()).catch(() => [])]);
+    const t = todayStr();
+    const today = fu.filter((f) => dayOf(f.due_at) === t), over = fu.filter((f) => dayOf(f.due_at) < t);
+    const calls = today.filter((f) => f.kind === 'call').length, demos = today.filter((f) => f.kind === 'demo' || f.kind === 'meeting').length;
+    const nxt = today.filter((f) => f.has_time && new Date(f.due_at) > new Date()).sort((x, y) => new Date(x.due_at) - new Date(y.due_at))[0];
+    const recvToday = inc.filter((r) => r.date === t && r.status === 'received').reduce((s, r) => s + r.amount_pkr, 0);
+    const checked = mon.monitors.filter((m) => m.last_checked), down = checked.filter((m) => !(m.last_status && m.last_status < 500)).length;
+    $('#pulseRows').innerHTML = `
+      <div class="row"><span>Follow-ups due</span><b>${today.length}${over.length ? ` <span style="color:#FFB3B3">+${over.length} late</span>` : ''}</b></div>
+      <div class="row"><span>Calls · demos</span><b>${calls} · ${demos}</b></div>
+      ${nxt ? `<div class="row"><span>Next</span><b>${fmtTime(nxt.due_at)} ${esc((nxt.name || '').split(' ')[0])}</b></div>` : ''}
+      <div class="row"><span>Received today</span><b>${rsK(recvToday)}</b></div>
+      <div class="row"><span>Apps</span><b>${checked.length ? (down ? `<span style="color:#FFB3B3">${down} down</span>` : `${checked.length} up`) : '—'}</b></div>`;
+    $('#pulseDot').classList.toggle('warn', !!(over.length || down));
+    const n = today.length + over.length;
+    [['#bellN'], ['#bellNM']].forEach(([s]) => { const el = $(s); el.textContent = n; el.classList.toggle('hidden', !n); });
+    const nl = $('#navLeadsN'); if (nl) { nl.textContent = st.notContacted; nl.classList.toggle('hidden', !st.notContacted); }
+  } catch {}
 }
 function quickAdd() {
   sheet('Quick add', [
@@ -188,6 +241,7 @@ $('#loginForm').onsubmit = async (e) => {
 async function boot() {
   [S.cfg, S.fin] = await Promise.all([api('/api/config'), api('/api/finance/config')]);
   S.month = S.fin.month;
+  if (window.Chart) { Chart.defaults.font.family = '"IBM Plex Sans", system-ui, sans-serif'; Chart.defaults.color = '#5B6B85'; Chart.defaults.borderColor = '#E9EEF6'; }
   $('#login').classList.add('hidden');
   buildNav();
   await route();
@@ -199,8 +253,8 @@ async function boot() {
 // ------------------------------------------------------------ DASHBOARD
 const VIEWS = {};
 VIEWS.dashboard = async () => {
-  actions(`<button class="btn main" id="adsBtn">📣 Today's Meta ads</button><button class="btn light" id="qaBtn">＋ Add</button>`);
-  $('#adsBtn').onclick = quickAds; $('#qaBtn').onclick = quickAdd;
+  actions(`<button class="btn main" id="adsBtn">📣 Today's Meta ads</button>`);
+  $('#adsBtn').onclick = quickAds;
   const [sum, st, fu, mon, projs, cn] = await Promise.all([
     api('/api/accounts/summary?month=' + thisMonth()), api('/api/stats'), api('/api/followups'), api('/api/monitors').catch(() => ({ monitors: [] })),
     api('/api/projects?status=ongoing').catch(() => []), api('/api/upwork/connects').catch(() => null),
@@ -238,36 +292,122 @@ VIEWS.dashboard = async () => {
       <div class="tile ${cn && cn.isSet && cn.balance < 30 ? 'red' : ''} click" data-go="upwork"><div class="l">Upwork Connects</div><div class="n">${cn && cn.isSet ? cn.balance : '—'}</div><div class="s">${cn && cn.isSet ? 'available' : 'tap to set balance'}</div></div>
     </div>
     <div class="cols3">
-      <div class="card"><div class="ch">Income vs expenses — last 12 months</div><div class="cb"><div class="chartbox"><canvas id="cMonths"></canvas></div></div></div>
+      ${moneyFlowCard(sum)}
       <div class="card"><div class="ch">Needs attention <span class="r badge ${alerts.length ? 'b-bad' : 'b-good'}">${alerts.length}</span></div>
         <div id="alerts">${alerts.length ? alerts.map((a, i) => `<div class="alert" data-i="${i}"><span class="ic">${a.ic}</span><div>${a.html}</div></div>`).join('') : '<div class="empty">All clear ✅</div>'}</div></div>
     </div>
     <div class="cols2" style="margin-top:12px">
-      <div class="card"><div class="ch">Meta ads — ${monthLabel(c.month)} <button class="btn sm main r" id="adsBtn2">＋ Today</button></div><div class="cb">
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;text-align:center">
-          <div><div class="sub">Spent</div><div class="bad" style="font-size:16px">${rs(ads.total)}</div></div>
-          <div><div class="sub">Earned from Meta clients</div><div class="good" style="font-size:16px">${rs(ads.earned)}</div></div>
-          <div><div class="sub">Return</div><div class="${ads.roas >= 1 ? 'good' : 'bad'}" style="font-size:16px">${ads.roas != null ? ads.roas.toFixed(1) + 'x' : '—'}</div></div></div>
-        <div class="chartbox" style="height:200px"><canvas id="cAds"></canvas></div></div></div>
-      <div class="card"><div class="ch">Where the money went (${monthShort(c.month)})</div><div class="cb">${sum.byCategory.length ? sum.byCategory.map((x) => `
-        <div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between"><span>${esc(x.category)}</span><b>${rs(x.total)}</b></div>
-        <div class="bar"><div style="width:${Math.max(3, (x.total / sum.byCategory[0].total) * 100)}%;background:${x.category === 'Meta Ads' ? RED : BLUE}"></div></div></div>`).join('') : '<div class="empty">No expenses yet this month.</div>'}</div></div>
+      ${metaAdsCard(ads, c.month)}
+      ${spendMixCard(sum.byCategory, c.expenses, c.month)}
     </div>`;
   $$('[data-go]').forEach((el) => (el.onclick = () => { const [v, q] = el.dataset.go.split('?'); if (q === 'meta') S.incStatus = 'meta'; else if (q) S.expCat = q.split('=')[1]; location.hash = v; }));
   $$('#alerts .alert').forEach((el) => (el.onclick = () => alerts[+el.dataset.i].fn()));
   if ($('#dashPush')) $('#dashPush').onclick = enablePush;
-  $('#adsBtn2').onclick = quickAds;
-  const draw = () => {
-    chart($('#cMonths'), { type: 'bar', data: { labels: sum.months.map((m) => monthShort(m.month)), datasets: [
-      { label: 'Income', data: sum.months.map((m) => m.income), backgroundColor: BLUE, borderRadius: 4 },
-      { label: 'Expenses', data: sum.months.map((m) => m.expenses), backgroundColor: RED, borderRadius: 4 },
-      { label: 'Profit', type: 'line', data: sum.months.map((m) => m.profit), borderColor: '#137a3a', backgroundColor: '#137a3a', tension: .3, pointRadius: 2 }] },
-      options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: (x) => `${x.dataset.label}: ${rs(x.raw)}` } } }, scales: { y: { ticks: { callback: (v) => rsK(v) } } } } });
-    chart($('#cAds'), { type: 'bar', data: { labels: ads.daily.map((d) => +d.date.slice(8)), datasets: [{ label: 'Meta ads', data: ads.daily.map((d) => d.pkr), backgroundColor: RED, borderRadius: 3 }] },
-      options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { title: (x) => fmtDate(ads.daily[x[0].dataIndex].date), label: (x) => rs(x.raw) + (ads.daily[x.dataIndex].usd ? ` ($${ads.daily[x.dataIndex].usd})` : '') } } }, scales: { y: { ticks: { callback: (v) => rsK(v) } } } } });
-  };
+  $$('.adsAdd').forEach((b) => (b.onclick = quickAds));
+  $$('[data-cat]').forEach((el) => (el.onclick = () => { S.expCat = el.dataset.cat; location.hash = 'expenses'; }));
+  const draw = () => { drawMoneyFlow(sum); drawMetaAds(ads); };
   if (window.Chart) draw(); else window.addEventListener('load', draw, { once: true });
 };
+
+// ------------------------------------------------------------ dashboard infographics
+// colour jobs: blue = money in / profit, coral = money out / loss (validated pair, CVD ΔE 27)
+const INK2 = '#5B6B85', GRID = '#E9EEF6';
+const CAT_COLORS = { 'Meta Ads': '#004AAD', Marketing: '#f47230', Upwork: '#00b894', Salaries: '#f2a600', 'Software & AI tools': '#ee7fac', 'Hosting & Domains': '#008a17', Email: '#6a4ce2', 'Office & Utilities': '#ec4647' };
+const OTHER_GRAY = '#A7B3C6';
+const baseScales = (fmt) => ({
+  x: { grid: { display: false }, border: { color: '#C9D3E3' }, ticks: { color: INK2, font: { size: 11.5 }, maxRotation: 0, autoSkip: true, autoSkipPadding: 6 } },
+  y: { grid: { color: GRID }, border: { display: false }, ticks: { color: INK2, font: { size: 11.5 }, maxTicksLimit: 5, callback: fmt || ((v) => axisK(v)) } },
+});
+const tipStyle = { backgroundColor: '#0A2A5E', titleColor: '#fff', bodyColor: '#DDE6F5', footerColor: '#fff', padding: 10, cornerRadius: 6, boxPadding: 4, usePointStyle: true, titleFont: { weight: '600' }, footerFont: { weight: '600' } };
+const colEnd = { borderRadius: { topLeft: 4, topRight: 4 }, borderSkipped: 'bottom' };
+const figure = (label, value, cls = '', note = '') => `<div class="fig"><div class="k">${label}</div><div class="v ${cls}">${value}</div>${note ? `<div class="nt">${note}</div>` : ''}</div>`;
+
+function moneyFlowCard(sum) {
+  const inc = sum.months.reduce((s, m) => s + m.income, 0), exp = sum.months.reduce((s, m) => s + m.expenses, 0), net = inc - exp;
+  const best = [...sum.months].sort((a, b) => b.profit - a.profit)[0];
+  const margin = inc ? Math.round((net / inc) * 100) : null;
+  return `<div class="card"><div class="ch">Money flow · last 12 months</div><div class="cb">
+    <div class="figs">${figure('Money in', rsK(inc))}${figure('Money out', rsK(exp))}${figure(net >= 0 ? 'Net profit' : 'Net loss', rsK(Math.abs(net)), net >= 0 ? 'pos' : 'neg', margin != null ? `${margin}% of income kept` : '')}${best && best.profit > 0 ? figure('Best month', monthShort(best.month), '', rsK(best.profit) + ' profit') : ''}</div>
+    <div class="lg"><span><i style="background:#004AAD"></i>Money in</span><span><i style="background:#FF7878"></i>Money out</span></div>
+    <div class="chartbox" style="height:210px"><canvas id="cMonths" role="img" aria-label="Money in and out per month for the last 12 months"></canvas></div>
+    <div class="subhd">Profit or loss each month</div>
+    <div class="chartbox" style="height:96px"><canvas id="cNet" role="img" aria-label="Net profit per month"></canvas></div>
+  </div></div>`;
+}
+function drawMoneyFlow(sum) {
+  const labels = sum.months.map((m) => monthShort(m.month));
+  const last = sum.months.length - 1;
+  // value labels on the current month only (selective labelling)
+  const capLabel = { id: 'capLabel', afterDatasetsDraw(ch) {
+    const { ctx } = ch; ctx.save(); ctx.font = '600 11px "IBM Plex Sans", sans-serif'; ctx.fillStyle = '#0B1F3F'; ctx.textAlign = 'center';
+    ch.data.datasets.forEach((ds, di) => { const el = ch.getDatasetMeta(di).data[last]; const v = ds.data[last]; if (el && v) ctx.fillText(axisK(v), el.x, el.y - 5); });
+    ctx.restore();
+  } };
+  chart($('#cMonths'), { type: 'bar', plugins: [capLabel],
+    data: { labels, datasets: [
+      { label: 'Money in', data: sum.months.map((m) => m.income), backgroundColor: '#004AAD', hoverBackgroundColor: '#003A88', maxBarThickness: 16, categoryPercentage: 0.62, barPercentage: 0.88, ...colEnd },
+      { label: 'Money out', data: sum.months.map((m) => m.expenses), backgroundColor: '#FF7878', hoverBackgroundColor: '#F25F5F', maxBarThickness: 16, categoryPercentage: 0.62, barPercentage: 0.88, ...colEnd }] },
+    options: { maintainAspectRatio: false, layout: { padding: { top: 16, right: 14 } }, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false }, tooltip: { ...tipStyle, callbacks: { title: (x) => monthLabel(sum.months[x[0].dataIndex].month), label: (x) => ` ${x.dataset.label}: ${rs(x.raw)}`,
+        footer: (x) => { const m = sum.months[x[0].dataIndex]; return `${m.profit >= 0 ? 'Profit' : 'Loss'}: ${rs(Math.abs(m.profit))}`; } } } },
+      scales: baseScales() } });
+  const netLabel = { id: 'netLabel', afterDatasetsDraw(ch) {
+    const { ctx } = ch; const el = ch.getDatasetMeta(0).data[last]; const v = sum.months[last].profit; if (!el || !v) return;
+    ctx.save(); ctx.font = '600 11px "IBM Plex Sans", sans-serif'; ctx.fillStyle = '#0B1F3F'; ctx.textAlign = 'center';
+    ctx.fillText((v < 0 ? '−' : '+') + axisK(Math.abs(v)), el.x, v >= 0 ? el.y - 5 : el.y + 13); ctx.restore();
+  } };
+  chart($('#cNet'), { type: 'bar', plugins: [netLabel],
+    data: { labels, datasets: [{ label: 'Net', data: sum.months.map((m) => m.profit), backgroundColor: sum.months.map((m) => (m.profit >= 0 ? '#004AAD' : '#FF7878')), maxBarThickness: 16, categoryPercentage: 0.62, borderRadius: 4, borderSkipped: false }] },
+    options: { maintainAspectRatio: false, layout: { padding: { top: 14, bottom: 4, right: 14 } },
+      plugins: { legend: { display: false }, tooltip: { ...tipStyle, callbacks: { title: (x) => monthLabel(sum.months[x[0].dataIndex].month), label: (x) => ` ${x.raw >= 0 ? 'Profit' : 'Loss'}: ${rs(Math.abs(x.raw))}` } } },
+      scales: { x: { display: false }, y: { grid: { color: (c) => (c.tick.value === 0 ? '#9AA8BF' : 'transparent'), lineWidth: 1 }, border: { display: false }, ticks: { display: false } } } } });
+}
+
+function metaAdsCard(ads, month) {
+  const days = ads.daily.filter((d) => d.pkr > 0);
+  const peak = days.length ? days.reduce((a, b) => (b.pkr > a.pkr ? b : a)) : null;
+  return `<div class="card"><div class="ch">Meta ads · ${monthLabel(month)} <button class="btn sm main r adsAdd">＋ Log today</button></div><div class="cb">
+    <div class="figs">${figure('Spent', rsK(ads.total), '', ads.activeDays ? `${ads.activeDays} day${ads.activeDays > 1 ? 's' : ''} active` : '')}${figure('Earned from Meta clients', rsK(ads.earned), ads.earned ? 'pos' : '')}${figure('Return', ads.roas != null ? ads.roas.toFixed(1) + '×' : '—', ads.roas == null ? '' : ads.roas >= 1 ? 'pos' : 'neg', ads.roas != null ? (ads.roas >= 1 ? 'ads paying for themselves' : 'spending more than earning') : '')}${figure('Cost per lead', ads.costPerLead ? rsK(ads.costPerLead) : '—')}</div>
+    ${days.length ? `<div class="chartbox" style="height:190px"><canvas id="cAds" role="img" aria-label="Meta ads spend per day"></canvas></div>
+      <div class="sub" style="margin-top:6px">Peak ${fmtShort(peak.date)}: ${rs(peak.pkr)} · average ${rs(ads.avgPerDay)} per active day</div>`
+    : `<div class="empty" style="padding:26px 10px">No ad spend logged in ${monthLabel(month)}.<br><button class="btn sm adsAdd" style="margin-top:10px">Log today's spend</button></div>`}
+  </div></div>`;
+}
+function drawMetaAds(ads) {
+  if (!$('#cAds')) return;
+  const avg = ads.avgPerDay || 0;
+  let peakI = -1; ads.daily.forEach((d, i) => { if (d.pkr > 0 && (peakI < 0 || d.pkr > ads.daily[peakI].pkr)) peakI = i; });
+  const overlay = { id: 'adsOverlay', afterDatasetsDraw(ch) {
+    const { ctx, chartArea: a, scales: { y } } = ch;
+    ctx.save();
+    if (avg) { const yy = y.getPixelForValue(avg); ctx.strokeStyle = '#0A2A5E'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(a.left, yy); ctx.lineTo(a.right, yy); ctx.stroke();
+      ctx.font = '500 11px "IBM Plex Sans", sans-serif'; ctx.fillStyle = '#0A2A5E'; ctx.textAlign = 'right'; ctx.fillText('avg ' + axisK(avg), a.right, yy - 4); }
+    const el = ch.getDatasetMeta(0).data[peakI];
+    if (el) { ctx.font = '600 11px "IBM Plex Sans", sans-serif'; ctx.fillStyle = '#0B1F3F'; ctx.textAlign = 'center'; ctx.fillText(axisK(ads.daily[peakI].pkr), el.x, el.y - 5); }
+    ctx.restore();
+  } };
+  chart($('#cAds'), { type: 'bar', plugins: [overlay],
+    data: { labels: ads.daily.map((d) => +d.date.slice(8)), datasets: [{ label: 'Meta ads', data: ads.daily.map((d) => d.pkr), backgroundColor: '#004AAD', hoverBackgroundColor: '#003A88', maxBarThickness: 12, categoryPercentage: 0.8, ...colEnd }] },
+    options: { maintainAspectRatio: false, layout: { padding: { top: 16 } },
+      plugins: { legend: { display: false }, tooltip: { ...tipStyle, callbacks: { title: (x) => fmtDate(ads.daily[x[0].dataIndex].date), label: (x) => ` Spent: ${rs(x.raw)}${ads.daily[x.dataIndex].usd ? ` ($${ads.daily[x.dataIndex].usd})` : ''}` } } },
+      scales: { ...baseScales(), x: { ...baseScales().x, ticks: { color: INK2, font: { size: 10.5 }, autoSkip: true, maxTicksLimit: 10, maxRotation: 0 } } } } });
+}
+
+function spendMixCard(byCat, total, month) {
+  if (!byCat.length) return `<div class="card"><div class="ch">Where the money went · ${monthShort(month)}</div><div class="empty">No expenses yet this month.</div></div>`;
+  // fixed colour per category (colour follows the entity, not its rank); long tail folds into "Other"
+  const named = byCat.filter((c) => CAT_COLORS[c.category]);
+  const rest = byCat.filter((c) => !CAT_COLORS[c.category]);
+  const parts = [...named.map((c) => ({ name: c.category, v: c.total, n: c.n, color: CAT_COLORS[c.category] })),
+    ...(rest.length ? [{ name: rest.length === 1 ? rest[0].category : 'Other', v: rest.reduce((s, c) => s + c.total, 0), n: rest.reduce((s, c) => s + c.n, 0), color: OTHER_GRAY, cats: rest.map((c) => c.category) }] : [])];
+  const pct = (v) => (total ? (v / total) * 100 : 0);
+  const light = (hex) => ['#f2a600', '#00b894', '#ee7fac', '#f47230', OTHER_GRAY].includes(hex);
+  return `<div class="card"><div class="ch">Where the money went · ${monthShort(month)} <span class="r sub">${rs(total)}</span></div><div class="cb">
+    <div class="seg" role="img" aria-label="Spending by category">${parts.map((p) => `<div style="flex:${p.v} 1 0;background:${p.color};color:${light(p.color) ? '#0B1F3F' : '#fff'}" title="${esc(p.name)}: ${rs(p.v)} (${pct(p.v).toFixed(0)}%)">${pct(p.v) >= 12 ? Math.round(pct(p.v)) + '%' : ''}</div>`).join('')}</div>
+    <div class="mix">${parts.map((p) => `<div class="mixrow" ${p.cats ? '' : `data-cat="${esc(p.name)}"`} title="${p.cats ? esc(p.cats.join(', ')) : 'Open ' + esc(p.name)}">
+      <i style="background:${p.color}"></i><span class="nm">${esc(p.name)}</span><span class="sub">${p.n} item${p.n > 1 ? 's' : ''}</span><b>${rs(p.v)}</b><span class="pc">${pct(p.v).toFixed(0)}%</span></div>`).join('')}</div>
+  </div></div>`;
+}
 
 // ------------------------------------------------------------ quick Meta ads
 function quickAds() {
@@ -713,7 +853,7 @@ VIEWS.upwork = async () => {
   const draw = () => chart($('#cUp'), { type: 'bar', data: { labels: d.months.map((m) => monthShort(m.month)), datasets: [
     { label: 'Earned', data: d.months.map((m) => m.earned), backgroundColor: '#14a800', borderRadius: 4 },
     { label: 'Spent', data: d.months.map((m) => m.spent), backgroundColor: RED, borderRadius: 4 }] },
-    options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: (x) => `${x.dataset.label}: ${rs(x.raw)}` } } }, scales: { y: { ticks: { callback: (v) => rsK(v) } } } } });
+    options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: (x) => `${x.dataset.label}: ${rs(x.raw)}` } } }, scales: { y: { ticks: { callback: (v) => 'Rs ' + axisK(v) } } } } });
   if (window.Chart) draw(); else window.addEventListener('load', draw, { once: true });
 };
 function setConnects() {

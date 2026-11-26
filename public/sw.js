@@ -1,6 +1,6 @@
 // PokitBio service worker: makes the app installable and opens instantly.
 // Data (/api) is always fetched live — never cached.
-const CACHE = 'pokitbio-v3';
+const CACHE = 'pokitbio-v4';
 const SHELL = ['/', '/index.html', '/app.js', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/vendor/chart.umd.js', '/logo-wordmark.png', '/favicon.ico'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', (e) => {
@@ -21,7 +21,7 @@ self.addEventListener('push', (e) => {
   let d = {}; try { d = e.data.json(); } catch { d = { title: 'PokitBio', body: e.data && e.data.text() }; }
   e.waitUntil(self.registration.showNotification(d.title || 'PokitBio reminder', {
     body: d.body || '', tag: d.tag, renotify: true, requireInteraction: true,
-    icon: '/icons/icon-192.png', badge: '/icons/icon-192.png', data: { url: d.url || '/' }, vibrate: [200, 100, 200],
+    icon: '/icons/icon-192.png', badge: '/icons/badge-96.png', data: { url: d.url || '/' }, vibrate: [200, 100, 200],
   }));
 });
 self.addEventListener('notificationclick', (e) => {

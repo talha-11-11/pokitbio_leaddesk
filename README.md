@@ -55,3 +55,6 @@ Webhook URL: `https://YOUR-APP.onrender.com/webhook`. The verify token is your `
 - On startup the app imports it automatically. Every row carries its Upwork record id, so restarting or importing again never creates duplicates.
 - To refresh, ask Claude "sync my Upwork", then use **Upwork → ⬆ Import Upwork file**. You can also replace the file in the repo and push.
 - The file contains client names and earnings. Keep the repo **private**, or remove the file after the first deploy (the data stays in Neon).
+
+## Design
+Navy sidebar grouped into Overview / Sales / Money / Team / System (it scrolls on short screens), a top bar with lead search, a bell for what's due today, and **New**. Under the logo, the live **Today** panel shows follow-ups due, calls and demos, the next appointment, money received today, and app status. Font: IBM Plex Sans, with aligned numbers.
