@@ -14,7 +14,7 @@ One app for running PokitBio. It works in a browser on a laptop and installs on 
 | **Expenses** | Every cost by category. **📣 Meta ads** is a one-tap daily entry |
 | **Subscriptions** | Claude, hosting, email, domains and so on. Tap **Paid** to record the expense and move the next due date forward |
 | **Staff** | Team members on salary, commission or freelance. **Pay** records the salary as an expense for that month |
-| **Accounts & reports** | Monthly profit and loss, top clients, month-by-month table, a ledger CSV, and **PDF reports** (daily, weekly or monthly) |
+| **Accounts & reports** | Monthly profit and loss, top clients, month-by-month table, a ledger CSV, and **PDF reports**: pick a type (Business, Money (P&L), Sales & leads, Meta ads, Upwork, Payoneer, Projects, Team & costs, Apps status, or Custom with ticked sections) for a day, week, month, year or custom dates. Each report has its own headline figures (with change vs the previous period) and highlights |
 | **Apps on Render** | Checks each app's URL to see whether it's up. With a Render API key it also shows every service and its last deploy (live, failed or building) |
 | **Settings** | Exchange rates, the demo list, install, log out |
 

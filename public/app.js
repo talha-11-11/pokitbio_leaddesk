@@ -279,7 +279,7 @@ VIEWS.dashboard = async () => {
   const ads = sum.ads;
   $('#view').innerHTML = `
     ${pushSupported() && Notification.permission !== 'granted' ? `<div class="card cb" style="margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="font-size:20px">🔔</span><div style="flex:1;min-width:200px"><b>Get reminders 1 hour before follow-ups, calls and demos</b><div class="sub">Turn on notifications on this phone / laptop.</div></div><button class="btn main" id="dashPush">Turn on</button></div>` : ''}
-    <div class="tiles four five">
+    <div class="tiles four">
       <div class="tile click" data-go="income"><div class="l">Income · ${monthLabel(c.month)}</div><div class="n">${rsK(c.income)}</div><div class="s">${delta(c.income, p.income)}</div></div>
       <div class="tile red click" data-go="expenses"><div class="l">Expenses</div><div class="n">${rsK(c.expenses)}</div><div class="s">${delta(c.expenses, p.expenses)}</div></div>
       <div class="tile ${c.profit >= 0 ? 'green' : 'red'} click" data-go="accounts"><div class="l">${c.profit >= 0 ? 'Profit' : 'Loss'}</div><div class="n">${rsK(c.profit)}</div><div class="s">${c.income ? Math.round((c.profit / c.income) * 100) + '% margin' : ''}</div></div>
@@ -287,9 +287,7 @@ VIEWS.dashboard = async () => {
       <div class="tile click" data-go="leads"><div class="l">New leads this month</div><div class="n">${sum.leads.new_leads}</div><div class="s">${st.notContacted} not contacted · ${sum.leads.demos} demos</div></div>
       <div class="tile click" data-go="income"><div class="l">Pending payments</div><div class="n">${rsK(sum.pending.total)}</div><div class="s">${sum.pending.n} unpaid</div></div>
       <div class="tile click" data-go="subs"><div class="l">Subscriptions / month</div><div class="n">${rsK(sum.subscriptions.monthlyBurn)}</div><div class="s">${sum.subscriptions.count} active</div></div>
-      <div class="tile click" data-go="staff"><div class="l">Staff payroll / month</div><div class="n">${rsK(sum.staff.payroll)}</div><div class="s">${sum.staff.active} on salary</div></div>
       <div class="tile click" data-go="projects"><div class="l">Ongoing projects</div><div class="n">${projs.length}</div><div class="s">${projRemaining ? rsK(projRemaining) + ' still to receive' : ''}${projDue.length ? ` · ${projDue.length} due soon` : ''}</div></div>
-      <div class="tile ${cn && cn.isSet && cn.balance < 30 ? 'red' : ''} click" data-go="upwork"><div class="l">Upwork Connects</div><div class="n">${cn && cn.isSet ? cn.balance : '—'}</div><div class="s">${cn && cn.isSet ? 'available' : 'tap to set balance'}</div></div>
     </div>
     <div class="cols3">
       ${moneyFlowCard(sum)}
@@ -1354,12 +1352,7 @@ VIEWS.accounts = async () => {
   const c = sum.current;
   const yr = sum.months.reduce((a, m) => ({ i: a.i + m.income, e: a.e + m.expenses }), { i: 0, e: 0 });
   $('#view').innerHTML = `
-    <div class="card" style="margin-bottom:12px"><div class="ch">📄 PDF reports</div><div class="cb">
-      <div class="toolbar" style="margin:0"><select id="rPeriod" class="inp"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly" selected>Monthly</option></select>
-        <input type="date" id="rDate" class="inp" value="${todayStr()}" /><button class="btn main" id="rPdf">⬇ Download PDF</button></div>
-      <div class="sub" style="margin-top:8px">Covers income, expenses, profit, Meta ads per day, new leads, demos sent, call notes, follow-ups, staff payments, subscriptions and the status of your apps on Render. Weekly runs Monday–Sunday around the date you pick.</div>
-      <div class="chips" style="margin-top:10px"><button class="chip" data-rq="daily">Today</button><button class="chip" data-rq="weekly">This week</button><button class="chip" data-rq="monthly">This month</button><button class="chip" data-rq="lastmonth">Last month</button></div>
-    </div></div>
+    ${reportBuilderCard()}
     <div class="toolbar">${monthPicker()}</div>
     <div class="tiles">
       <div class="tile green"><div class="l">Income · ${monthLabel(c.month)}</div><div class="n">${rs(c.income)}</div></div>
@@ -1397,14 +1390,89 @@ VIEWS.accounts = async () => {
     </table></div></div>`;
   bindMonth(VIEWS.accounts);
   $$('tr[data-m]').forEach((tr) => (tr.onclick = () => { S.month = tr.dataset.m; VIEWS.accounts(); }));
-  const pdf = (period, date) => download(`/api/reports/pdf?period=${period}&date=${date}`, `pokitbio-${period}-report-${date}.pdf`);
-  $('#rPdf').onclick = () => pdf($('#rPeriod').value, $('#rDate').value || todayStr());
-  $$('[data-rq]').forEach((b) => (b.onclick = () => {
-    const q = b.dataset.rq;
-    if (q === 'lastmonth') pdf('monthly', monthShift(thisMonth(), -1) + '-01'); else pdf(q, todayStr());
-    toast('Preparing PDF…');
-  }));
+  bindReportBuilder();
 };
+
+
+// ------------------------------------------------------------ report builder
+const REPORTS = [
+  ['full', 'Business report', 'Everything: money, leads, Meta ads, Upwork, Payoneer, projects, team, apps'],
+  ['finance', 'Money (P&L)', 'Income, expenses by category, profit, staff, subscriptions, Payoneer'],
+  ['sales', 'Sales & leads', 'New leads, contacted, demos sent, call notes, follow-ups, won/lost'],
+  ['marketing', 'Meta ads', 'Ad spend per day, earnings from Meta clients, return, cost per lead'],
+  ['upwork', 'Upwork', 'Earnings, Connects & fees, proposals, win rate, Upwork projects'],
+  ['payoneer', 'Payoneer', 'Money in, withdrawals to bank, fees, card spend'],
+  ['projects', 'Projects', 'Ongoing work, received vs budget, completed projects'],
+  ['team', 'Team & costs', 'Salaries and commissions paid, subscriptions, all expenses'],
+  ['apps', 'Apps status', 'Which apps on Render are up or down'],
+  ['custom', 'Custom', 'Pick exactly the sections you want'],
+];
+const SECTION_NAMES = { highlights: 'Highlights', leads: 'Leads & sales', demos: 'Demos sent', calls: 'Call notes', followups: 'Follow-ups', meta: 'Meta ads', projects: 'Projects', upwork: 'Upwork', payoneer: 'Payoneer', income: 'Income', expenses: 'Expenses', staff: 'Staff payments', subs: 'Subscriptions', apps: 'Apps status' };
+const REPORT_SECTIONS = { full: Object.keys(SECTION_NAMES), finance: ['highlights', 'income', 'expenses', 'staff', 'subs', 'payoneer'], sales: ['highlights', 'leads', 'demos', 'calls', 'followups'], marketing: ['highlights', 'meta', 'leads'],
+  upwork: ['highlights', 'upwork', 'projects'], payoneer: ['payoneer'], projects: ['projects'], team: ['staff', 'subs', 'expenses'], apps: ['apps'] };
+S.rep = S.rep || { type: 'full', period: 'monthly', date: null, from: null, to: null, sections: [...REPORT_SECTIONS.full] };
+function reportBuilderCard() {
+  const R = S.rep; R.date = R.date || todayStr(); R.from = R.from || thisMonth() + '-01'; R.to = R.to || todayStr();
+  return `<div class="card" style="margin-bottom:14px"><div class="ch">PDF reports <span class="r sub">pick a report, a period, download</span></div><div class="cb">
+    <div class="reptypes">${REPORTS.map(([k, t, d]) => `<button class="reptype ${R.type === k ? 'on' : ''}" data-rt="${k}"><b>${t}</b><span>${d}</span></button>`).join('')}</div>
+    <div class="repbar">
+      <div class="seg2">${[['daily', 'Day'], ['weekly', 'Week'], ['monthly', 'Month'], ['yearly', 'Year'], ['custom', 'Custom dates']].map(([k, l]) => `<button class="${R.period === k ? 'on' : ''}" data-rp="${k}">${l}</button>`).join('')}</div>
+      ${R.period === 'custom' ? `<input type="date" class="inp" id="rFrom" value="${R.from}"/><span class="sub">to</span><input type="date" class="inp" id="rTo" value="${R.to}"/>`
+        : R.period === 'monthly' ? `<input type="month" class="inp" id="rMonth" value="${R.date.slice(0, 7)}"/>`
+        : R.period === 'yearly' ? `<select class="inp" id="rYear">${[0, 1, 2].map((n) => { const y = +todayStr().slice(0, 4) - n; return `<option ${String(y) === R.date.slice(0, 4) ? 'selected' : ''}>${y}</option>`; }).join('')}</select>`
+        : `<input type="date" class="inp" id="rDate" value="${R.date}"/>`}
+      <span class="sub" id="rLabel"></span>
+      <button class="btn main" id="rPdf" style="margin-left:auto">⬇ Download PDF</button>
+    </div>
+    <div class="repsecs"><span class="sub">Sections:</span>${Object.entries(SECTION_NAMES).map(([k, n]) => `<label class="chk"><input type="checkbox" data-rs="${k}" ${R.sections.includes(k) ? 'checked' : ''}/> ${n}</label>`).join('')}</div>
+    <div class="chips" style="margin-top:10px"><span class="sub" style="align-self:center">Quick:</span>
+      <button class="chip" data-rq="sales:daily">Today's sales</button><button class="chip" data-rq="full:weekly">This week</button><button class="chip" data-rq="finance:monthly">This month's P&L</button>
+      <button class="chip" data-rq="full:lastmonth">Last month, everything</button><button class="chip" data-rq="marketing:monthly">Meta ads this month</button><button class="chip" data-rq="upwork:yearly">Upwork this year</button><button class="chip" data-rq="finance:yearly">This year's P&L</button></div>
+  </div></div>`;
+}
+function reportLabel() {
+  const R = S.rep, d = new Date(R.date + 'T12:00:00');
+  if (R.period === 'custom') return `${fmtDate(R.from)} – ${fmtDate(R.to)}`;
+  if (R.period === 'yearly') return R.date.slice(0, 4);
+  if (R.period === 'monthly') return monthLabel(R.date.slice(0, 7));
+  if (R.period === 'weekly') { const dow = (d.getDay() + 6) % 7; const s = new Date(d - dow * 864e5), e = new Date(+s + 6 * 864e5); return `${fmtShort(s.toISOString())} – ${fmtDate(e.toISOString())}`; }
+  return fmtDate(R.date);
+}
+function downloadReport() {
+  const R = S.rep;
+  if (!R.sections.length) return toast('Tick at least one section');
+  const q = new URLSearchParams({ type: R.type, period: R.period, date: R.date });
+  if (R.period === 'custom') { q.set('from', R.from); q.set('to', R.to); }
+  if (R.type === 'custom') q.set('sections', R.sections.join(','));
+  const name = REPORTS.find((r) => r[0] === R.type)[1].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  toast('Preparing PDF…');
+  download('/api/reports/pdf?' + q, `pokitbio-${name}-${R.period === 'custom' ? R.from + '_' + R.to : R.period === 'monthly' ? R.date.slice(0, 7) : R.period === 'yearly' ? R.date.slice(0, 4) : R.date}.pdf`);
+}
+function bindReportBuilder() {
+  const R = S.rep, rerender = () => { const card = $('.reptypes').closest('.card'); card.outerHTML = reportBuilderCard(); bindReportBuilder(); };
+  $('#rLabel').textContent = reportLabel();
+  $$('[data-rt]').forEach((b) => (b.onclick = () => { R.type = b.dataset.rt; if (REPORT_SECTIONS[R.type]) R.sections = [...REPORT_SECTIONS[R.type]]; rerender(); }));
+  $$('[data-rp]').forEach((b) => (b.onclick = () => { R.period = b.dataset.rp; rerender(); }));
+  $$('[data-rs]').forEach((c) => (c.onchange = () => {
+    R.sections = $$('[data-rs]').filter((x) => x.checked).map((x) => x.dataset.rs);
+    const match = Object.entries(REPORT_SECTIONS).find(([, s]) => s.length === R.sections.length && s.every((x) => R.sections.includes(x)));
+    R.type = match ? match[0] : 'custom';
+    $$('[data-rt]').forEach((b) => b.classList.toggle('on', b.dataset.rt === R.type));
+  }));
+  const set = (k, v) => { R[k] = v; $('#rLabel').textContent = reportLabel(); };
+  if ($('#rDate')) $('#rDate').onchange = (e) => set('date', e.target.value || todayStr());
+  if ($('#rMonth')) $('#rMonth').onchange = (e) => set('date', (e.target.value || thisMonth()) + '-01');
+  if ($('#rYear')) $('#rYear').onchange = (e) => set('date', e.target.value + '-06-15');
+  if ($('#rFrom')) $('#rFrom').onchange = (e) => set('from', e.target.value);
+  if ($('#rTo')) $('#rTo').onchange = (e) => set('to', e.target.value);
+  $('#rPdf').onclick = downloadReport;
+  $$('[data-rq]').forEach((b) => (b.onclick = () => {
+    const [type, per] = b.dataset.rq.split(':');
+    R.type = type; R.sections = [...REPORT_SECTIONS[type]];
+    if (per === 'lastmonth') { R.period = 'monthly'; R.date = monthShift(thisMonth(), -1) + '-01'; } else { R.period = per; R.date = todayStr(); }
+    rerender(); downloadReport();
+  }));
+}
 
 // ------------------------------------------------------------ APPS ON RENDER
 VIEWS.apps = async () => {

@@ -282,6 +282,19 @@
   .mixrow .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mixrow b { font-weight: 600; } .mixrow .pc { color: var(--muted); text-align: right; font-size: 12px; }
 
+  /* report builder */
+  .reptypes { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+  .reptype { text-align: left; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: grid; gap: 2px; }
+  .reptype b { color: var(--navy); font-weight: 600; } .reptype span { color: var(--muted); font-size: 12px; line-height: 1.35; }
+  .reptype:hover { border-color: #B9C7DD; }
+  .reptype.on { border-color: var(--sec); box-shadow: inset 0 0 0 1px var(--sec); background: var(--soft-sec); }
+  .repbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-2); }
+  .seg2 { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg2 button { border: 0; background: #fff; padding: 7px 12px; color: var(--muted); font-weight: 500; border-right: 1px solid var(--line); }
+  .seg2 button:last-child { border-right: 0; } .seg2 button.on { background: var(--navy); color: #fff; }
+  .repsecs { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; align-items: center; font-size: 13px; }
+  @media (max-width: 860px) { .reptypes { grid-template-columns: 1fr 1fr; } .reptype span { display: none; } .seg2 { width: 100%; } .seg2 button { flex: 1; padding: 7px 4px; } #rPdf { width: 100%; justify-content: center; margin-left: 0 !important; } }
+
   /* login */
   #login { background: var(--navy); place-items: center; }
   #login .box { width: min(400px, 100%); border-radius: 12px; }
