@@ -9,6 +9,7 @@ import { setupFinance } from './finance.js';
 import { setupOps } from './ops.js';
 import { setupProjects } from './projects.js';
 import { setupPayoneer } from './payoneer.js';
+import { setupReminders } from './reminders.js';
 
 pg.types.setTypeParser(1082, (v) => v); // DATE columns come back as plain 'YYYY-MM-DD'
 
@@ -337,19 +338,36 @@ app.delete('/api/notes/:id', wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
+const FU_KINDS = { followup: 'Follow-up', call: 'Call', demo: 'Demo', meeting: 'Meeting' };
+const fuWhen = (d, hasTime) => isoDay(d) + (hasTime ? ' ' + new Date(d).toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: APP_TZ }) : '');
 app.post('/api/leads/:id/followups', wrap(async (req, res) => {
   const { due_at, note } = req.body || {};
   if (!due_at) return res.status(400).json({ error: 'due_at required' });
-  await pool.query(`INSERT INTO followups (lead_id, due_at, note) VALUES ($1,$2,$3)`, [+req.params.id, due_at, note || null]);
-  await logActivity(+req.params.id, `Follow-up scheduled for ${isoDay(due_at)}${note ? ' — ' + note : ''}`);
+  const kind = FU_KINDS[req.body.kind] ? req.body.kind : 'followup';
+  const hasTime = req.body.has_time === true || req.body.has_time === 'true';
+  const remind = req.body.remind_min === undefined || req.body.remind_min === '' ? 60 : Math.max(0, parseInt(req.body.remind_min, 10) || 0);
+  await pool.query(`INSERT INTO followups (lead_id, due_at, note, kind, has_time, remind_min) VALUES ($1,$2,$3,$4,$5,$6)`,
+    [+req.params.id, due_at, note || null, kind, hasTime, remind]);
+  await logActivity(+req.params.id, `${FU_KINDS[kind]} scheduled for ${fuWhen(due_at, hasTime)}${note ? ' — ' + note : ''}${hasTime && remind ? ' 🔔' : ''}`);
   res.json({ ok: true });
 }));
 app.patch('/api/followups/:id', wrap(async (req, res) => {
   const fu = await one(`SELECT * FROM followups WHERE id=$1`, [+req.params.id]);
   if (!fu) return res.status(404).json({ error: 'not found' });
-  const done = !!req.body?.done;
-  await pool.query(`UPDATE followups SET done_at=${done ? 'now()' : 'NULL'} WHERE id=$1`, [fu.id]);
-  await logActivity(fu.lead_id, done ? `Follow-up done (${isoDay(fu.due_at)}${fu.note ? ' — ' + fu.note : ''})` : 'Follow-up reopened');
+  const b = req.body || {};
+  if ('done' in b) {
+    const done = !!b.done;
+    await pool.query(`UPDATE followups SET done_at=${done ? 'now()' : 'NULL'} WHERE id=$1`, [fu.id]);
+    await logActivity(fu.lead_id, done ? `${FU_KINDS[fu.kind] || 'Follow-up'} done (${fuWhen(fu.due_at, fu.has_time)}${fu.note ? ' — ' + fu.note : ''})` : 'Follow-up reopened');
+  }
+  // reschedule / edit — a new time means a new reminder
+  if (b.due_at || 'note' in b || b.kind || 'remind_min' in b) {
+    await pool.query(`UPDATE followups SET due_at=COALESCE($1,due_at), note=CASE WHEN $2::boolean THEN $3 ELSE note END, kind=COALESCE($4,kind),
+      has_time=COALESCE($5,has_time), remind_min=COALESCE($6,remind_min), reminded_at=NULL WHERE id=$7`,
+      [b.due_at || null, 'note' in b, b.note || null, FU_KINDS[b.kind] ? b.kind : null, 'has_time' in b ? !!b.has_time : null,
+       'remind_min' in b ? Math.max(0, parseInt(b.remind_min, 10) || 0) : null, fu.id]);
+    if (b.due_at) await logActivity(fu.lead_id, `Rescheduled to ${fuWhen(b.due_at, b.has_time ?? fu.has_time)}`);
+  }
   res.json({ ok: true });
 }));
 app.delete('/api/followups/:id', wrap(async (req, res) => {
@@ -443,6 +461,7 @@ await setupFinance(app, pool, { APP_TZ });
 await setupOps(app, pool, { APP_TZ, RENDER_API_KEY: process.env.RENDER_API_KEY, MONITOR_INTERVAL_MIN: process.env.MONITOR_INTERVAL_MIN || 30, SELF_URL: process.env.RENDER_EXTERNAL_URL || process.env.SELF_URL });
 const payoneer = await setupPayoneer(app, pool, { APP_TZ });
 await setupProjects(app, pool, { APP_TZ, payoneer });
+await setupReminders(app, pool, { APP_TZ });
 
 // one-time pass over messages already stored (only fills empty fields)
 (async () => {

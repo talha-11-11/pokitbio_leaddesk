@@ -43,6 +43,13 @@ function rel(iso) {
   if (a < 1440) return d <= 0 ? `${Math.round(a / 60)}h ago` : `in ${Math.round(a / 60)}h`;
   return d <= 0 ? `${Math.round(a / 1440)}d ago` : `in ${Math.round(a / 1440)}d`;
 }
+const FU_KIND = { followup: ['⏰', 'Follow-up'], call: ['📞', 'Call'], demo: ['🎬', 'Demo'], meeting: ['🤝', 'Meeting'] };
+const fmtTime = (v) => new Date(v).toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true });
+const fuWhen = (f) => `${fmtDate(f.due_at)}${f.has_time ? ' · ' + fmtTime(f.due_at) : ''}`;
+const fuBell = (f) => (f.has_time && f.remind_min > 0 && !f.done_at ? ` <span class="sub" title="Reminder ${f.remind_min >= 60 ? f.remind_min / 60 + 'h' : f.remind_min + 'min'} before">🔔${f.reminded_at ? '✓' : ''}</span>` : '');
+const localDT = (dateStr, timeStr) => new Date(`${dateStr}T${timeStr || '12:00'}:00`).toISOString();
+const nextHour = () => { const d = new Date(Date.now() + 60 * 6e4); return String(d.getHours()).padStart(2, '0') + ':00'; };
+const REMIND_OPTS = [[60, '🔔 1 hour before'], [30, '30 min before'], [120, '2 hours before'], [1440, '1 day before'], [0, 'No reminder']];
 const fuClass = (iso) => { if (!iso) return ''; const d = dayOf(iso), t = todayStr(); return d < t ? 'over' : d === t ? 'today' : ''; };
 const dateToIso = (v) => (v ? new Date(v + 'T12:00:00').toISOString() : null);
 const monthShift = (m, n) => { const d = new Date(m + '-15T12:00:00'); d.setMonth(d.getMonth() + n); return d.toLocaleDateString('en-CA').slice(0, 7); };
@@ -183,7 +190,9 @@ async function boot() {
   S.month = S.fin.month;
   $('#login').classList.add('hidden');
   buildNav();
-  route();
+  await route();
+  const deep = new URLSearchParams(location.search).get('lead');
+  if (deep) { history.replaceState(null, '', '/' + location.hash); openLead(+deep); }
   setInterval(() => { if (!document.hidden && S.view === 'leads' && !S.current) VIEWS.leads(true); }, 30000);
 }
 
@@ -215,6 +224,7 @@ VIEWS.dashboard = async () => {
   ];
   const ads = sum.ads;
   $('#view').innerHTML = `
+    ${pushSupported() && Notification.permission !== 'granted' ? `<div class="card cb" style="margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="font-size:20px">🔔</span><div style="flex:1;min-width:200px"><b>Get reminders 1 hour before follow-ups, calls and demos</b><div class="sub">Turn on notifications on this phone / laptop.</div></div><button class="btn main" id="dashPush">Turn on</button></div>` : ''}
     <div class="tiles four five">
       <div class="tile click" data-go="income"><div class="l">Income · ${monthLabel(c.month)}</div><div class="n">${rsK(c.income)}</div><div class="s">${delta(c.income, p.income)}</div></div>
       <div class="tile red click" data-go="expenses"><div class="l">Expenses</div><div class="n">${rsK(c.expenses)}</div><div class="s">${delta(c.expenses, p.expenses)}</div></div>
@@ -245,6 +255,7 @@ VIEWS.dashboard = async () => {
     </div>`;
   $$('[data-go]').forEach((el) => (el.onclick = () => { const [v, q] = el.dataset.go.split('?'); if (q === 'meta') S.incStatus = 'meta'; else if (q) S.expCat = q.split('=')[1]; location.hash = v; }));
   $$('#alerts .alert').forEach((el) => (el.onclick = () => alerts[+el.dataset.i].fn()));
+  if ($('#dashPush')) $('#dashPush').onclick = enablePush;
   $('#adsBtn2').onclick = quickAds;
   const draw = () => {
     chart($('#cMonths'), { type: 'bar', data: { labels: sum.months.map((m) => monthShort(m.month)), datasets: [
@@ -371,8 +382,8 @@ async function loadFollowups() {
   list.forEach((f) => { const d = dayOf(f.due_at); (d < t ? groups.Overdue : d === t ? groups.Today : groups.Upcoming).push(f); });
   $('#fuList').innerHTML = list.length ? Object.entries(groups).filter(([, v]) => v.length).map(([g, v]) => `
     <div style="padding:12px 14px;border-bottom:1px solid var(--line);font-weight:700;color:${g === 'Overdue' ? 'var(--main)' : 'var(--sec)'}">${g} (${v.length})</div>
-    ${v.map((f) => `<div class="li" data-open="${f.lead_id}"><div class="grow"><div class="t">${esc(f.name || 'Unknown')} <span class="plat ${f.platform}">${platLabel[f.platform]}</span></div>
-      <div class="sub">${fmtDate(f.due_at)}${f.note ? ' — ' + esc(f.note) : ''}</div></div><button class="btn sm" data-done="${f.id}">✓ Done</button></div>`).join('')}`).join('')
+    ${v.map((f) => `<div class="li" data-open="${f.lead_id}"><div class="grow"><div class="t">${(FU_KIND[f.kind] || FU_KIND.followup)[0]} ${esc(f.name || 'Unknown')} <span class="plat ${f.platform}">${platLabel[f.platform]}</span>${fuBell(f)}</div>
+      <div class="sub">${(FU_KIND[f.kind] || FU_KIND.followup)[1]} · ${fuWhen(f)}${f.note ? ' — ' + esc(f.note) : ''}</div></div><button class="btn sm" data-done="${f.id}">✓ Done</button></div>`).join('')}`).join('')
     : '<div class="empty">No pending follow-ups 🎉</div>';
   $$('[data-open]').forEach((el) => (el.onclick = () => openLead(+el.dataset.open)));
   $$('[data-done]').forEach((el) => (el.onclick = async (e) => { e.stopPropagation(); await api('/api/followups/' + el.dataset.done, { method: 'PATCH', body: { done: true } }); toast('Done'); loadFollowups(); }));
@@ -424,6 +435,7 @@ async function openLead(id) {
         <div class="addrow"><select id="demoSel"><option value="">Choose demo…</option>${catalog.filter((c) => c.active).map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}<option value="custom">Other (type below)…</option></select>
           <input type="text" id="demoCustom" class="hidden" placeholder="Demo name or link" /></div>
         <div class="addrow"><input type="date" id="demoDate" value="${todayStr()}" /><input type="text" id="demoNote" placeholder="Note (e.g. sent on WhatsApp, showed on call)" /><button class="btn main sm" id="demoAdd">Add demo</button></div>
+        <div class="addrow"><button class="btn ghost sm" id="demoSched">📅 Schedule a live demo with reminder →</button></div>
       </div>
 
       <div class="sec"><h3>📞 Calls — what we discussed <span class="sub r">${l.calls.length}</span></h3>
@@ -432,15 +444,20 @@ async function openLead(id) {
         <div class="addrow"><input type="datetime-local" id="callAt" value="${nowLocal}" /><input type="number" id="callMin" placeholder="Minutes" style="width:90px;flex:none" inputmode="numeric"/>
           <select id="callOut" style="flex:none;min-width:130px"><option value="">Outcome…</option>${['Interested', 'Needs time', 'Wants quotation', 'Not interested', 'No answer', 'Closed / won'].map((o) => `<option>${o}</option>`).join('')}</select></div>
         <div class="addrow"><textarea id="callSum" rows="3" placeholder="What did we discuss? Requirements, budget, objections…"></textarea></div>
-        <div class="addrow"><input type="text" id="callNext" placeholder="Next step (optional)" /><input type="date" id="callFu" title="Also create a follow-up on this date" /><button class="btn main sm" id="callAdd">Save call</button></div>
-        <div class="sub" style="margin-top:4px">Pick a date next to "Next step" to also add it as a follow-up.</div>
+        <div class="addrow"><input type="text" id="callNext" placeholder="Next step (optional)" /><input type="date" id="callFu" title="Also schedule the next step" style="flex:none"/><input type="time" id="callFuT" value="11:00" style="flex:none"/><button class="btn main sm" id="callAdd">Save call</button></div>
+        <div class="sub" style="margin-top:4px">Pick a date (and time) for the next step and it's scheduled with a reminder 1 hour before.</div>
       </div>
 
-      <div class="sec"><h3>⏰ Follow-ups</h3>
+      <div class="sec" id="fuSec"><h3>⏰ Follow-ups, calls & demos <span class="sub r">reminder on your phone before each one</span></h3>
         <div class="items">${l.followups.length ? l.followups.map((f) => `<div class="item ${f.done_at ? 'done' : ''}"><input type="checkbox" data-fu="${f.id}" ${f.done_at ? 'checked' : ''} style="margin-top:3px"/>
-          <div class="grow"><div class="${f.done_at ? '' : fuClass(f.due_at)}">${fmtDate(f.due_at)}</div>${f.note ? `<div class="sub">${esc(f.note)}</div>` : ''}</div><button class="del" data-delfu="${f.id}">🗑</button></div>`).join('') : '<div class="sub">No follow-ups scheduled.</div>'}</div>
-        <div class="addrow"><input type="date" id="fuDate" value="${new Date(Date.now() + 2 * 864e5).toLocaleDateString('en-CA')}" /><input type="text" id="fuNote" placeholder="What to follow up on" /><button class="btn main sm" id="fuAdd">Add</button></div>
-        <div class="addrow">${[1, 3, 7, 14].map((n) => `<button class="btn light sm" data-plus="${n}">+${n}d</button>`).join('')}</div></div>
+          <div class="grow" data-editfu="${f.id}" style="cursor:pointer"><div class="${f.done_at ? '' : fuClass(f.due_at)}">${(FU_KIND[f.kind] || FU_KIND.followup)[0]} ${(FU_KIND[f.kind] || FU_KIND.followup)[1]} · ${fuWhen(f)}${fuBell(f)}</div>${f.note ? `<div class="sub">${esc(f.note)}</div>` : ''}</div>
+          <button class="del" data-delfu="${f.id}">🗑</button></div>`).join('') : '<div class="sub">Nothing scheduled.</div>'}</div>
+        <div class="addrow"><select id="fuKind" style="flex:none;min-width:120px">${Object.entries(FU_KIND).map(([k, [ic, w]]) => `<option value="${k}">${ic} ${w}</option>`).join('')}</select>
+          <input type="date" id="fuDate" value="${new Date(Date.now() + 864e5).toLocaleDateString('en-CA')}" style="flex:none"/><input type="time" id="fuTime" value="11:00" style="flex:none"/>
+          <select id="fuRemind" style="flex:none;min-width:150px">${REMIND_OPTS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select></div>
+        <div class="addrow"><input type="text" id="fuNote" placeholder="What is it about (e.g. send pricing, show POS demo)" /><button class="btn main sm" id="fuAdd">Schedule</button></div>
+        <div class="addrow"><span class="sub">Quick:</span>${[['today', 'Today'], ['1', 'Tomorrow'], ['3', '+3d'], ['7', '+1 week']].map(([n, t]) => `<button class="btn light sm" data-plus="${n}">${t}</button>`).join('')}
+          ${typeof Notification !== 'undefined' && Notification.permission !== 'granted' ? '<button class="btn ghost sm" id="fuNotif">🔔 Turn on phone reminders</button>' : ''}</div></div>
 
       <div class="sec"><h3>📝 Notes & activity</h3>
         <div class="addrow" style="margin:0 0 8px"><textarea id="noteText" rows="2" placeholder="Add a note…"></textarea></div>
@@ -485,13 +502,33 @@ async function openLead(id) {
     const summary = $('#callSum').value.trim(); if (!summary) return toast('Write what you discussed');
     const next = $('#callNext').value.trim(), fu = $('#callFu').value;
     await api(`/api/leads/${id}/calls`, { method: 'POST', body: { call_at: $('#callAt').value ? new Date($('#callAt').value).toISOString() : null, duration_min: $('#callMin').value, outcome: $('#callOut').value, summary, next_step: next } });
-    if (fu) await api(`/api/leads/${id}/followups`, { method: 'POST', body: { due_at: dateToIso(fu), note: next || 'Follow up after call' } });
+    if (fu) await api(`/api/leads/${id}/followups`, { method: 'POST', body: { due_at: localDT(fu, $('#callFuT').value), has_time: true, remind_min: 60, kind: 'call', note: next || 'Follow up after call' } });
     again('Call saved');
   };
   $$('[data-delcall]', d).forEach((b) => (b.onclick = async () => { await api('/api/calls/' + b.dataset.delcall, { method: 'DELETE' }); again(); }));
   // follow-ups
-  $$('[data-plus]', d).forEach((b) => (b.onclick = () => { $('#fuDate').value = new Date(Date.now() + b.dataset.plus * 864e5).toLocaleDateString('en-CA'); $('#fuNote').focus(); }));
-  $('#fuAdd').onclick = async () => { if (!$('#fuDate').value) return toast('Pick a date'); await api(`/api/leads/${id}/followups`, { method: 'POST', body: { due_at: dateToIso($('#fuDate').value), note: $('#fuNote').value.trim() } }); again('Follow-up added'); };
+  $$('[data-plus]', d).forEach((b) => (b.onclick = () => { const n = b.dataset.plus === 'today' ? 0 : +b.dataset.plus; $('#fuDate').value = new Date(Date.now() + n * 864e5).toLocaleDateString('en-CA'); if (n === 0) $('#fuTime').value = nextHour(); $('#fuNote').focus(); }));
+  $('#fuAdd').onclick = async () => {
+    if (!$('#fuDate').value) return toast('Pick a date');
+    const when = localDT($('#fuDate').value, $('#fuTime').value || '11:00');
+    const remind = +$('#fuRemind').value;
+    await api(`/api/leads/${id}/followups`, { method: 'POST', body: { due_at: when, has_time: true, remind_min: remind, kind: $('#fuKind').value, note: $('#fuNote').value.trim() } });
+    const k = FU_KIND[$('#fuKind').value][1];
+    again(remind ? `${k} scheduled · reminder ${REMIND_OPTS.find((o) => o[0] === remind)[1].replace('🔔 ', '')}` + (typeof Notification !== 'undefined' && Notification.permission !== 'granted' ? ' — turn on phone reminders in Settings' : '') : `${k} scheduled`);
+  };
+  $('#demoSched').onclick = () => { $('#fuKind').value = 'demo'; $('#fuNote').value = $('#fuNote').value || 'Live demo'; $('#fuSec').scrollIntoView({ behavior: 'smooth', block: 'center' }); $('#fuDate').focus(); };
+  if ($('#fuNotif')) $('#fuNotif').onclick = enablePush;
+  $$('[data-editfu]', d).forEach((el) => (el.onclick = () => {
+    const f = l.followups.find((x) => String(x.id) === el.dataset.editfu); if (!f) return;
+    const dt = new Date(f.due_at);
+    openForm({ title: 'Edit / reschedule', submit: 'Save', fields: [
+      { name: 'kind', label: 'Type', type: 'select', options: Object.entries(FU_KIND).map(([k, [ic, w]]) => [k, `${ic} ${w}`]), value: f.kind || 'followup' },
+      { name: 'date', label: 'Date', type: 'date', value: dt.toLocaleDateString('en-CA'), required: true },
+      { name: 'time', label: 'Time', type: 'time', value: f.has_time ? String(dt.getHours()).padStart(2, '0') + ':' + String(dt.getMinutes()).padStart(2, '0') : '11:00' },
+      { name: 'remind_min', label: 'Reminder', type: 'select', options: REMIND_OPTS, value: f.remind_min },
+      { name: 'note', label: 'Note', value: f.note || '' }],
+      onSubmit: async (v) => { await api('/api/followups/' + f.id, { method: 'PATCH', body: { kind: v.kind, due_at: localDT(v.date, v.time), has_time: true, remind_min: +v.remind_min, note: v.note } }); again('Rescheduled'); } });
+  }));
   $$('[data-fu]', d).forEach((cb) => (cb.onchange = async () => { await api('/api/followups/' + cb.dataset.fu, { method: 'PATCH', body: { done: cb.checked } }); again(); }));
   $$('[data-delfu]', d).forEach((b) => (b.onclick = async () => { await api('/api/followups/' + b.dataset.delfu, { method: 'DELETE' }); again(); }));
   // notes
@@ -1275,6 +1312,7 @@ VIEWS.settings = async () => {
       <div class="card"><div class="ch">🎬 Demo list <span class="r sub">${catalog.length}</span></div><div class="list">${catalog.map((c) => `
         <div class="li"><div class="grow"><div class="t">${esc(c.name)}</div>${c.link ? `<a class="sub" href="${esc(c.link)}" target="_blank" rel="noopener">${esc(c.link)}</a>` : ''}</div><button class="btn ghost sm" data-deldc="${c.id}">✕</button></div>`).join('')}</div>
         <div class="cb"><div class="addrow" style="margin:0"><input type="text" id="dcName" placeholder="Demo name" /><input type="text" id="dcLink" placeholder="https://…" /><button class="btn sm main" id="dcAdd">Add</button></div></div></div>
+      <div class="card"><div class="ch">🔔 Reminders</div><div class="cb" style="display:grid;gap:10px" id="pushCard"><div class="sub">Loading…</div></div></div>
       <div class="card"><div class="ch">📱 App</div><div class="cb" style="display:grid;gap:10px">
         <button class="btn main" id="instBtn3">⬇ Install on this device</button>
         <div class="sub" id="instHelp">On Android Chrome: tap the button above, or open the ⋮ menu → <b>Install app</b> / <b>Add to Home screen</b>. On a laptop: click the install icon at the right of Chrome's address bar.</div>
@@ -1284,8 +1322,34 @@ VIEWS.settings = async () => {
   $('#dcAdd').onclick = async () => { const name = $('#dcName').value.trim(); if (!name) return toast('Name needed'); await api('/api/demo-catalog', { method: 'POST', body: { name, link: $('#dcLink').value.trim() } }); toast('Added'); VIEWS.settings(); };
   $$('[data-deldc]').forEach((b) => (b.onclick = async () => { await api('/api/demo-catalog/' + b.dataset.deldc, { method: 'DELETE' }); VIEWS.settings(); }));
   $('#instBtn3').onclick = installApp;
+  const ps = await api('/api/push/status').catch(() => ({ devices: [] }));
+  const on = pushSupported() && Notification.permission === 'granted';
+  $('#pushCard').innerHTML = `
+    <div>${on ? '✅ This device gets reminders.' : '❌ This device is not getting reminders yet.'}</div>
+    <div class="sub">You get a notification before every scheduled follow-up, call, demo or meeting (1 hour before by default), plus a summary at 9:00 AM of what's due today. Works when the app is closed.</div>
+    ${on ? '<button class="btn light" id="pushTest">Send a test notification</button>' : '<button class="btn main" id="pushOn">🔔 Turn on reminders on this device</button>'}
+    <div class="sub">Devices receiving reminders: ${ps.devices.length ? ps.devices.map((x) => esc(x.device || 'device')).join(', ') : 'none'}</div>`;
+  if ($('#pushOn')) $('#pushOn').onclick = enablePush;
+  if ($('#pushTest')) $('#pushTest').onclick = async () => { const r = await api('/api/push/test', { method: 'POST' }); toast(r.sent ? `Sent to ${r.sent} device(s)` : 'No devices subscribed yet'); };
   $('#logout').onclick = () => { try { localStorage.removeItem('pb_key'); } catch {} location.reload(); };
 };
+
+// ------------------------------------------------------------ Push reminders
+const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && typeof Notification !== 'undefined';
+const b64ToU8 = (b64) => { const p = '='.repeat((4 - (b64.length % 4)) % 4); const raw = atob((b64 + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from([...raw].map((c) => c.charCodeAt(0))); };
+async function enablePush() {
+  if (!pushSupported()) return toast('This browser can\'t show notifications. On iPhone, add the app to the Home Screen first.');
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') return toast('Notifications are blocked — allow them for this site in Chrome settings');
+  const reg = await navigator.serviceWorker.ready;
+  const { publicKey } = await api('/api/push/key');
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(publicKey) });
+  const device = /Android/i.test(navigator.userAgent) ? 'Android phone' : /iPhone|iPad/i.test(navigator.userAgent) ? 'iPhone' : /Mac/i.test(navigator.userAgent) ? 'Mac' : /Windows/i.test(navigator.userAgent) ? 'Windows PC' : 'Device';
+  await api('/api/push/subscribe', { method: 'POST', body: { subscription: sub.toJSON(), device } });
+  toast('🔔 Reminders are on for this ' + device.toLowerCase());
+  if (S.view === 'settings') VIEWS.settings();
+}
 
 // ------------------------------------------------------------ PWA install
 let deferredPrompt = null;
