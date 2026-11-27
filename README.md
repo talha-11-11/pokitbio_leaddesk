@@ -16,10 +16,11 @@ One app for running PokitBio. It works in a browser on a laptop and installs on 
 | **Staff** | Team members on salary, commission or freelance. **Pay** records the salary as an expense for that month |
 | **Accounts & reports** | Monthly profit and loss, top clients, month-by-month table, a ledger CSV, and **PDF reports**: pick a type (Business, Money (P&L), Sales & leads, Meta ads, Upwork, Payoneer, Projects, Team & costs, Apps status, or Custom with ticked sections) for a day, week, month, year or custom dates. Each report has its own headline figures (with change vs the previous period) and highlights |
 | **Apps on Render** | Checks each app's URL to see whether it's up. With a Render API key it also shows every service and its last deploy (live, failed or building) |
+| **App usage** (Apps on Render) | For each Render app, every day: how many times it was **opened**, how long it was **awake**, and how many times it **woke up** from sleep. Tap an app for daily charts and a 24-hour timeline of when it was awake. Needs `RENDER_API_KEY`. Daily totals are saved, so history grows beyond what Render keeps. Render apps are checked through Render's API (not visited), and this app's own pings are subtracted, so the numbers aren't inflated |
 | **Settings** | Exchange rates, the demo list, install, log out |
 
 ## Update an existing deploy
-Copy all the files over your repo (new: `finance.js`, `ops.js`, `projects.js`, `payoneer.js`, `reminders.js`, `extract.js`, `public/app.js`, `public/sw.js`,
+Copy all the files over your repo (new: `finance.js`, `ops.js`, `projects.js`, `payoneer.js`, `reminders.js`, `usage.js`, `extract.js`, `public/app.js`, `public/sw.js`,
 `public/manifest.webmanifest`, `public/icons/`), then push. Render runs `npm install` (which adds `pdfkit` and `chart.js`) and redeploys.
 New database tables are created automatically on start-up, and your existing leads are kept.
 

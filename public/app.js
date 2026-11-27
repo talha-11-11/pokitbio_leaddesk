@@ -1490,6 +1490,7 @@ VIEWS.apps = async () => {
   $('#view').innerHTML = `
     <div class="tiles"><div class="tile green"><div class="l">Up</div><div class="n">${nUp}</div></div><div class="tile ${nDown ? 'red' : ''}"><div class="l">Down / not responding</div><div class="n">${nDown}</div></div>
       <div class="tile"><div class="l">Checked every</div><div class="n">${d.intervalMin} min</div></div></div>
+    <div id="usageCard" style="margin-bottom:12px"></div>
     ${d.renderConnected ? (d.renderError ? `<div class="card cb bad" style="margin-bottom:12px">Render API: ${esc(d.renderError)}</div>` : `
     <div class="card" style="margin-bottom:12px"><div class="ch">Render services (${d.render.length})</div><div class="list">${d.render.map((s) => `
       <div class="li" onclick="window.open('${esc(s.dashboard || 'https://dashboard.render.com')}','_blank')"><div class="grow"><div class="t">${esc(s.name)} ${s.suspended === 'suspended' ? '<span class="badge b-mute">suspended</span>' : ''}</div>
@@ -1505,7 +1506,70 @@ VIEWS.apps = async () => {
           <button class="del btn ghost sm" data-delmon="${m.id}" title="Stop monitoring">✕</button></div>`).join('')}</div></div>` : ''; }).join('')}
     <div class="sub">Free Render apps fall asleep after 15 minutes without visits; the first check after that can take up to a minute, which is normal.</div>`;
   $$('[data-delmon]').forEach((b) => (b.onclick = async () => { await api('/api/monitors/' + b.dataset.delmon, { method: 'DELETE' }); route(); }));
+  loadUsage();
 };
+
+
+// ------------------------------------------------------------ app usage (Render metrics)
+const fmtDur = (min) => { min = Math.round(min || 0); if (!min) return '0m'; const h = Math.floor(min / 60), m = min % 60; return h ? `${h}h${m ? ' ' + m + 'm' : ''}` : `${m}m`; };
+S.usageDays = S.usageDays || 14;
+async function loadUsage(refresh) {
+  const box = $('#usageCard'); if (!box) return;
+  box.innerHTML = `<div class="card"><div class="ch">How often each app is opened</div><div class="empty">Reading usage from Render…</div></div>`;
+  let u;
+  try { u = await api(`/api/render/usage?days=${S.usageDays}${refresh ? '&refresh=1' : ''}`); } catch (e) { box.innerHTML = `<div class="card cb bad">${esc(e.message)}</div>`; return; }
+  if (!u.connected) { box.innerHTML = `<div class="card cb"><b>See how often each app is opened and how long it stays awake</b><div class="sub" style="margin-top:4px">Add <code>RENDER_API_KEY</code> in Render → Environment (Render → Account settings → API keys). The app then reads each service's visits and running time from Render every day.</div></div>`; return; }
+  S.usage = u;
+  const today = u.services.map((s) => s.days[s.days.length - 1]);
+  const tOpens = today.reduce((a, d) => a + d.opens, 0), tAwake = today.reduce((a, d) => a + d.awakeMin, 0);
+  const hasAny = u.services.some((s) => s.days.some((d) => d.hasData));
+  box.innerHTML = `<div class="card"><div class="ch">How often each app is opened
+      <span class="r" style="display:flex;gap:6px;align-items:center"><span class="seg2">${[7, 14, 30].map((n) => `<button class="${S.usageDays === n ? 'on' : ''}" data-ud="${n}">${n} days</button>`).join('')}</span><button class="btn light sm" id="uRef">⟳</button></span></div>
+    <div class="cb">
+      ${u.error ? `<div class="bad" style="margin-bottom:8px">Render: ${esc(u.error)}${hasAny ? ' — showing saved history' : ''}</div>` : ''}
+      <div class="figs">${figure('Opened today, all apps', tOpens.toLocaleString())}${figure('Awake today, all apps', fmtDur(tAwake))}${figure(`Opened in ${u.days} days`, u.services.reduce((a, s) => a + s.total.opens, 0).toLocaleString())}${figure('Apps', u.services.length)}</div>
+      ${hasAny ? `<div class="tscroll"><table class="usage">
+        <tr><th>App</th><th class="num">Opened today</th><th class="num">Awake today</th><th>Opened per day · last ${u.days} days</th><th class="num">Total</th><th class="num">Avg awake / day</th><th class="num">Woke up</th></tr>
+        ${u.services.map((s, i) => { const td = s.days[s.days.length - 1]; const max = Math.max(1, ...s.days.map((d) => d.opens));
+          return `<tr class="row" data-us="${i}"><td><div class="name">${esc(s.name)}</div><div class="sub">${esc((s.url || '').replace(/^https?:\/\//, ''))}</div></td>
+          <td class="num"><b>${td.opens}</b></td><td class="num">${fmtDur(td.awakeMin)}</td>
+          <td><div class="spark" title="${s.days.map((d) => `${fmtShort(d.day)}: ${d.opens}`).join('\n')}">${s.days.map((d, k) => `<i style="height:${d.opens ? Math.max(8, (d.opens / max) * 100) : 0}%" class="${k === s.days.length - 1 ? 'now' : ''}"></i>`).join('')}</div></td>
+          <td class="num">${s.total.opens.toLocaleString()}</td><td class="num">${fmtDur(s.total.awakeMin / u.days)}</td><td class="num">${s.total.wakes}×</td></tr>`; }).join('')}
+      </table></div>
+      <div class="sub" style="margin-top:8px">"Opened" counts visits (page loads and app requests), not counting this app's own checks. "Awake" is how long Render kept the app running; free apps sleep after 15 minutes without visits. Tap an app for its day-by-day timeline.${u.updatedAt ? ` Updated ${rel(u.updatedAt)}.` : ''}</div>`
+      : `<div class="empty">No usage data yet. Render's numbers appear here after the first read; history then builds up day by day.</div>`}
+    </div></div>`;
+  $$('[data-ud]').forEach((b) => (b.onclick = () => { S.usageDays = +b.dataset.ud; loadUsage(); }));
+  $('#uRef').onclick = () => loadUsage(true);
+  $$('[data-us]').forEach((tr) => (tr.onclick = () => usageDetail(u.services[+tr.dataset.us])));
+}
+function usageDetail(s) {
+  const days = s.days, last7 = days.slice(-7).reverse();
+  const busiest = days.reduce((a, d) => (d.opens > a.opens ? d : a), days[0]);
+  $('#modalRoot').innerHTML = `<div class="modal"><div class="box" style="width:min(880px,100%)">
+    <h2>${esc(s.name)}</h2><div class="sub">${esc(s.url || '')}${s.plan ? ' · ' + esc(s.plan) + ' plan' : ''}</div>
+    <div class="figs" style="margin-top:6px">${figure(`Opened · ${days.length} days`, s.total.opens.toLocaleString())}${figure('Average per day', Math.round(s.total.opens / days.length).toLocaleString())}${figure('Awake per day', fmtDur(s.total.awakeMin / days.length))}${figure('Busiest day', busiest.opens ? fmtShort(busiest.day) : '—', '', busiest.opens ? busiest.opens + ' opens' : '')}</div>
+    <div class="subhd" style="border:0;padding:0;margin:0 0 4px">Opened per day</div>
+    <div class="chartbox" style="height:170px"><canvas id="cUseO" role="img" aria-label="Opens per day"></canvas></div>
+    <div class="subhd">Hours awake per day</div>
+    <div class="chartbox" style="height:130px"><canvas id="cUseA" role="img" aria-label="Hours awake per day"></canvas></div>
+    <div class="subhd">When it was awake · last 7 days</div>
+    <div class="tl">
+      <div class="tlrow tlhead"><span></span><div class="tlaxis">${[0, 6, 12, 18, 24].map((h) => `<span style="left:${(h / 24) * 100}%">${h === 24 ? '' : h === 0 ? '12am' : h === 12 ? '12pm' : h < 12 ? h + 'am' : h - 12 + 'pm'}</span>`).join('')}</div><span></span></div>
+      ${last7.map((d) => `<div class="tlrow"><span class="sub">${new Date(d.day + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+        <div class="tlbar">${(d.segments || []).map(([a, b]) => `<i style="left:${(a / 1440) * 100}%;width:${Math.max(0.4, ((b - a) / 1440) * 100)}%" title="${Math.floor(a / 60)}:${String(a % 60).padStart(2, '0')}–${Math.floor(b / 60)}:${String(b % 60).padStart(2, '0')}"></i>`).join('')}</div>
+        <span class="sub tlnum"><b>${d.opens}</b> opens · ${fmtDur(d.awakeMin)}${d.wakes ? ` · woke ${d.wakes}×` : ''}</span></div>`).join('')}
+    </div>
+    <div class="mact"><button class="btn light" id="mCancel">Close</button></div></div></div>`;
+  $('#mCancel').onclick = closeModal;
+  $('.modal').onclick = (e) => { if (e.target.classList.contains('modal')) closeModal(); };
+  const labels = days.map((d) => fmtShort(d.day));
+  chart($('#cUseO'), { type: 'bar', data: { labels, datasets: [{ label: 'Opened', data: days.map((d) => d.opens), backgroundColor: '#004AAD', hoverBackgroundColor: '#003A88', maxBarThickness: 18, ...colEnd }] },
+    options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { ...tipStyle, callbacks: { title: (x) => fmtDate(days[x[0].dataIndex].day), label: (x) => ` Opened ${x.raw} time${x.raw === 1 ? '' : 's'}`, footer: (x) => { const d = days[x[0].dataIndex]; return d.own ? `(${d.own} own checks left out)` : ''; } } } }, scales: baseScales((v) => axisK(v)) } });
+  chart($('#cUseA'), { type: 'bar', data: { labels, datasets: [{ label: 'Awake', data: days.map((d) => +(d.awakeMin / 60).toFixed(2)), backgroundColor: '#0A2A5E', maxBarThickness: 18, ...colEnd }] },
+    options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { ...tipStyle, callbacks: { title: (x) => fmtDate(days[x[0].dataIndex].day), label: (x) => ` Awake ${fmtDur(days[x.dataIndex].awakeMin)}${days[x.dataIndex].wakes ? ` · woke up ${days[x.dataIndex].wakes}×` : ''}` } } },
+      scales: baseScales((v) => v + 'h') } });
+}
 
 // ------------------------------------------------------------ SETTINGS
 VIEWS.settings = async () => {

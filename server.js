@@ -10,6 +10,7 @@ import { setupOps } from './ops.js';
 import { setupProjects } from './projects.js';
 import { setupPayoneer } from './payoneer.js';
 import { setupReminders } from './reminders.js';
+import { setupUsage } from './usage.js';
 
 pg.types.setTypeParser(1082, (v) => v); // DATE columns come back as plain 'YYYY-MM-DD'
 
@@ -462,6 +463,7 @@ await setupOps(app, pool, { APP_TZ, RENDER_API_KEY: process.env.RENDER_API_KEY, 
 const payoneer = await setupPayoneer(app, pool, { APP_TZ });
 await setupProjects(app, pool, { APP_TZ, payoneer });
 await setupReminders(app, pool, { APP_TZ });
+await setupUsage(app, pool, { APP_TZ, RENDER_API_KEY: process.env.RENDER_API_KEY, SELF_URL: process.env.RENDER_EXTERNAL_URL || process.env.SELF_URL });
 
 // one-time pass over messages already stored (only fills empty fields)
 (async () => {

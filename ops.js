@@ -16,6 +16,7 @@ const DEFAULT_DEMOS = [
   { name: 'Portfolio', link: 'https://portfolio-peuk.onrender.com' },
 ];
 
+const RB = process.env.RENDER_API_BASE || 'https://api.render.com/v1';
 export async function setupOps(app, pool, { APP_TZ = 'Asia/Karachi', RENDER_API_KEY = '', MONITOR_INTERVAL_MIN = 30, SELF_URL = '' } = {}) {
   const all = async (sql, p = []) => (await pool.query(sql, p)).rows;
   const one = async (sql, p = []) => (await pool.query(sql, p)).rows[0];
@@ -90,12 +91,12 @@ export async function setupOps(app, pool, { APP_TZ = 'Asia/Karachi', RENDER_API_
     if (!RENDER_API_KEY) return null;
     if (Date.now() - renderCache.at < 120000 && renderCache.data) return renderCache.data;
     const h = { Authorization: `Bearer ${RENDER_API_KEY}`, Accept: 'application/json' };
-    const list = await (await fetch('https://api.render.com/v1/services?limit=100', { headers: h })).json();
+    const list = await (await fetch(RB + '/services?limit=100', { headers: h })).json();
     if (!Array.isArray(list)) throw new Error(list?.message || 'Render API error');
     const out = await Promise.all(list.map(async ({ service: s }) => {
       let deploy = null;
       try {
-        const d = await (await fetch(`https://api.render.com/v1/services/${s.id}/deploys?limit=1`, { headers: h })).json();
+        const d = await (await fetch(`${RB}/services/${s.id}/deploys?limit=1`, { headers: h })).json();
         deploy = d?.[0]?.deploy || null;
       } catch {}
       return {
@@ -110,7 +111,26 @@ export async function setupOps(app, pool, { APP_TZ = 'Asia/Karachi', RENDER_API_
     return out;
   }
 
+  // our own visits are logged so usage numbers can leave them out
+  await pool.query(`CREATE TABLE IF NOT EXISTS own_pings (url TEXT NOT NULL, day DATE NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (url, day))`);
+  const logPing = (url) => pool.query(`INSERT INTO own_pings(url, day, n) VALUES ($1, (now() AT TIME ZONE '${APP_TZ}')::date, 1)
+    ON CONFLICT (url, day) DO UPDATE SET n = own_pings.n + 1`, [String(url).replace(/\/+$/, '')]).catch(() => {});
+
   async function check(m) {
+    // Render services: read status from Render instead of visiting (a visit would wake a sleeping free app and skew usage)
+    if (RENDER_API_KEY && m.render_id) {
+      try {
+        const s = (await renderServices())?.find((x) => x.id === m.render_id);
+        if (s) {
+          const bad = s.suspended === 'suspended' ? 'suspended' : ['build_failed', 'update_failed', 'deactivated'].includes(s.deploy?.status) ? 'deploy ' + s.deploy.status.replace(/_/g, ' ') : null;
+          await pool.query(`UPDATE monitors SET last_status=$1, last_ms=NULL, last_error=$2, last_checked=now(),
+            last_ok_at=CASE WHEN $3 THEN now() ELSE last_ok_at END, down_since=CASE WHEN $3 THEN NULL ELSE COALESCE(down_since, now()) END WHERE id=$4`,
+            [bad ? 503 : 200, bad, !bad, m.id]);
+          return;
+        }
+      } catch {}
+    }
+    logPing(m.url);
     const t0 = Date.now();
     let status = null, err = null;
     try {
@@ -133,7 +153,7 @@ export async function setupOps(app, pool, { APP_TZ = 'Asia/Karachi', RENDER_API_
   setTimeout(() => checkAll().catch(() => {}), 15000);
   setInterval(() => checkAll().catch(() => {}), Math.max(5, +MONITOR_INTERVAL_MIN) * 60000);
   // keep this app awake (free Render sleeps after 15 min)
-  if (SELF_URL) setInterval(() => fetch(SELF_URL.replace(/\/$/, '') + '/healthz').catch(() => {}), 10 * 60000);
+  if (SELF_URL) setInterval(() => { logPing(SELF_URL); fetch(SELF_URL.replace(/\/$/, '') + '/healthz').catch(() => {}); }, 10 * 60000);
 
   app.get('/api/monitors', wrap(async (_req, res) => {
     let render = null, renderError = null;
