@@ -1526,7 +1526,7 @@ async function loadUsage(refresh) {
   box.innerHTML = `<div class="card"><div class="ch">How often each app is opened
       <span class="r" style="display:flex;gap:6px;align-items:center"><span class="seg2">${[7, 14, 30].map((n) => `<button class="${S.usageDays === n ? 'on' : ''}" data-ud="${n}">${n} days</button>`).join('')}</span><button class="btn light sm" id="uRef">⟳</button></span></div>
     <div class="cb">
-      ${u.error ? `<div class="bad" style="margin-bottom:8px">Render: ${esc(u.error)}${hasAny ? ' — showing saved history' : ''}</div>` : ''}
+      ${u.error ? `<div class="bad" style="margin-bottom:8px">Render: ${esc(u.error)}${hasAny ? ' — showing saved history' : ''} <button class="btn ghost sm" id="uDbg">details</button></div>` : ''}
       <div class="figs">${figure('Opened today, all apps', tOpens.toLocaleString())}${figure('Awake today, all apps', fmtDur(tAwake))}${figure(`Opened in ${u.days} days`, u.services.reduce((a, s) => a + s.total.opens, 0).toLocaleString())}${figure('Apps', u.services.length)}</div>
       ${hasAny ? `<div class="tscroll"><table class="usage">
         <tr><th>App</th><th class="num">Opened today</th><th class="num">Awake today</th><th>Opened per day · last ${u.days} days</th><th class="num">Total</th><th class="num">Avg awake / day</th><th class="num">Woke up</th></tr>
@@ -1541,6 +1541,16 @@ async function loadUsage(refresh) {
     </div></div>`;
   $$('[data-ud]').forEach((b) => (b.onclick = () => { S.usageDays = +b.dataset.ud; loadUsage(); }));
   $('#uRef').onclick = () => loadUsage(true);
+  if ($('#uDbg')) $('#uDbg').onclick = async () => {
+    const dbg = await api('/api/render/usage/debug').catch((e) => ({ error: e.message }));
+    const txt = JSON.stringify(dbg, null, 2);
+    $('#modalRoot').innerHTML = `<div class="modal"><div class="box" style="width:min(820px,100%)"><h2>What Render replied</h2>
+      <div class="sub">Copy this and send it to Claude so the reader can be matched to it. It contains no keys or passwords.</div>
+      <textarea class="inp" rows="16" style="width:100%;font:12px ui-monospace,monospace" readonly>${esc(txt)}</textarea>
+      <div class="mact"><button class="btn light" id="mCancel">Close</button><button class="btn" id="dbgCopy">Copy</button></div></div></div>`;
+    $('#mCancel').onclick = closeModal;
+    $('#dbgCopy').onclick = async () => { try { await navigator.clipboard.writeText(txt); toast('Copied'); } catch { $('#modalRoot textarea').select(); toast('Select all and copy'); } };
+  };
   $$('[data-us]').forEach((tr) => (tr.onclick = () => usageDetail(u.services[+tr.dataset.us])));
 }
 function usageDetail(s) {

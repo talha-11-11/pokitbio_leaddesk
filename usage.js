@@ -15,13 +15,26 @@ export async function setupUsage(app, pool, { RENDER_API_KEY = '', APP_TZ = 'Asi
   );`);
 
   const H = () => ({ Authorization: `Bearer ${RENDER_API_KEY}`, Accept: 'application/json' });
+  const raw = {}; // last raw replies, shown on request to diagnose format surprises
   const get = async (path, params) => {
     const qs = new URLSearchParams();
     for (const [k, v] of Object.entries(params)) (Array.isArray(v) ? v : [v]).forEach((x) => x != null && qs.append(k, x));
     const r = await fetch(`${RB}${path}?${qs}`, { headers: H() });
-    const j = await r.json().catch(() => null);
-    if (!r.ok) throw new Error(j?.message || `Render API ${r.status}`);
+    const text = await r.text();
+    raw[path] = { status: r.status, query: qs.toString().slice(0, 300), body: text.slice(0, 3000) };
+    let j = null; try { j = JSON.parse(text); } catch {}
+    if (!r.ok) throw Object.assign(new Error(j?.message || `Render API ${r.status}`), { status: r.status });
     return j;
+  };
+  // Render documents startTime/endTime as date-time; try ISO first, then epoch seconds
+  let timeFmt = 'iso';
+  const T = (sec) => (timeFmt === 'iso' ? new Date(sec * 1000).toISOString() : String(sec));
+  const metric = async (path, start, end, res, ids) => {
+    try { return await get(path, { startTime: T(start), endTime: T(end), resolutionSeconds: res, resource: ids }); }
+    catch (e) {
+      if (e.status === 400 && /startTime|endTime|time/i.test(e.message)) { timeFmt = timeFmt === 'iso' ? 'epoch' : 'iso'; return get(path, { startTime: T(start), endTime: T(end), resolutionSeconds: res, resource: ids }); }
+      throw e;
+    }
   };
   const dayOf = (ms) => new Date(ms).toLocaleDateString('en-CA', { timeZone: APP_TZ });
   const minOfDay = (ms) => { const p = new Date(ms).toLocaleTimeString('en-GB', { timeZone: APP_TZ, hour12: false, hour: '2-digit', minute: '2-digit' }).split(':'); return +p[0] * 60 + +p[1]; };
@@ -64,8 +77,12 @@ export async function setupUsage(app, pool, { RENDER_API_KEY = '', APP_TZ = 'Asi
     const groups = []; for (let i = 0; i < ids.length; i += 10) groups.push(ids.slice(i, i + 10));
     const reqSeries = [], instSeries = [];
     for (const g of groups) {
-      reqSeries.push(...parseSeries(await get('/metrics/http-requests', { startTime: start, endTime: end, resolutionSeconds: 3600, resource: g })));
-      instSeries.push(...parseSeries(await get('/metrics/instance-count', { startTime: start, endTime: end, resolutionSeconds: STEP, resource: g })));
+      reqSeries.push(...parseSeries(await metric('/metrics/http-requests', start, end, 3600, g)));
+      instSeries.push(...parseSeries(await metric('/metrics/instance-count', start, end, STEP, g)));
+    }
+    if (!reqSeries.some((s) => s.pts.length) && !instSeries.some((s) => s.pts.length)) {
+      const body = (raw['/metrics/instance-count']?.body || '').trim();
+      if (body && body !== '[]') throw new Error('Render replied in a format this app does not read yet — open "details" and send it to Claude');
     }
     const own = await all(`SELECT url, day::text AS day, n FROM own_pings WHERE day >= (now() AT TIME ZONE '${APP_TZ}')::date - $1::int`, [days]).catch(() => []);
     const ownMap = new Map(own.map((o) => [`${cleanUrl(o.url)}|${o.day}`, o.n]));
@@ -100,6 +117,7 @@ export async function setupUsage(app, pool, { RENDER_API_KEY = '', APP_TZ = 'Asi
     return { services };
   }
 
+  app.get('/api/render/usage/debug', (_req, res) => res.json({ timeFormat: timeFmt, replies: raw }));
   app.get('/api/render/usage', wrap(async (req, res) => {
     if (!RENDER_API_KEY) return res.json({ connected: false });
     const days = Math.min(30, Math.max(1, parseInt(req.query.days, 10) || 14));
