@@ -20,7 +20,7 @@ One app for running PokitBio. It works in a browser on a laptop and installs on 
 | **Settings** | Exchange rates, the demo list, install, log out |
 
 ## Update an existing deploy
-Copy all the files over your repo (new: `finance.js`, `ops.js`, `projects.js`, `payoneer.js`, `reminders.js`, `usage.js`, `extract.js`, `public/app.js`, `public/sw.js`,
+Copy all the files over your repo (new: `finance.js`, `ops.js`, `projects.js`, `payoneer.js`, `reminders.js`, `usage.js`, `render-api.js`, `beacon.js`, `extract.js`, `public/app.js`, `public/sw.js`,
 `public/manifest.webmanifest`, `public/icons/`), then push. Render runs `npm install` (which adds `pdfkit` and `chart.js`) and redeploys.
 New database tables are created automatically on start-up, and your existing leads are kept.
 
@@ -59,3 +59,10 @@ Webhook URL: `https://YOUR-APP.onrender.com/webhook`. The verify token is your `
 
 ## Design
 Navy sidebar grouped into Overview / Sales / Money / Team / System (it scrolls on short screens), a top bar with lead search, a bell for what's due today, and **New**. Under the logo, the live **Today** panel shows follow-ups due, calls and demos, the next appointment, money received today, and app status. Font: IBM Plex Sans, with aligned numbers.
+
+
+## Live app tracking (free, no Render plan needed)
+Apps on Render → **Live tracking** shows a short snippet for Node, Python and static sites. Paste it into an app and push:
+the app reports when it wakes up, every 5 minutes while running, and each page visit, to `/beacon` on this engine.
+The app name is taken from Render's `RENDER_SERVICE_NAME`, so the same code works in every app and is matched to its Render card.
+Apps with live tracking show "awake now / asleep", last opened time, opens by hour and most opened pages. Apps without it keep using Render's hourly numbers.

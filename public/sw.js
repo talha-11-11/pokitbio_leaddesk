@@ -1,6 +1,6 @@
 // PokitBio service worker: makes the app installable and opens instantly.
 // Data (/api) is always fetched live — never cached.
-const CACHE = 'pokitbio-v4';
+const CACHE = 'pokitbio-v5';
 const SHELL = ['/', '/index.html', '/app.js', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/vendor/chart.umd.js', '/logo-wordmark.png', '/favicon.ico'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', (e) => {

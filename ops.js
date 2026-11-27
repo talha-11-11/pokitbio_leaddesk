@@ -16,7 +16,7 @@ const DEFAULT_DEMOS = [
   { name: 'Portfolio', link: 'https://portfolio-peuk.onrender.com' },
 ];
 
-const RB = process.env.RENDER_API_BASE || 'https://api.render.com/v1';
+import { renderClient } from './render-api.js';
 export async function setupOps(app, pool, { APP_TZ = 'Asia/Karachi', RENDER_API_KEY = '', MONITOR_INTERVAL_MIN = 30, SELF_URL = '' } = {}) {
   const all = async (sql, p = []) => (await pool.query(sql, p)).rows;
   const one = async (sql, p = []) => (await pool.query(sql, p)).rows[0];
@@ -86,28 +86,17 @@ export async function setupOps(app, pool, { APP_TZ = 'Asia/Karachi', RENDER_API_
   app.delete('/api/calls/:id', wrap(async (req, res) => { await pool.query(`DELETE FROM calls WHERE id=$1`, [+req.params.id]); res.json({ ok: true }); }));
 
   // ---------------------------------------------------------------- Render + uptime
-  let renderCache = { at: 0, data: null };
+  const rc = RENDER_API_KEY ? renderClient(pool, RENDER_API_KEY) : null;
+  let lastLinked = '';
   async function renderServices() {
-    if (!RENDER_API_KEY) return null;
-    if (Date.now() - renderCache.at < 120000 && renderCache.data) return renderCache.data;
-    const h = { Authorization: `Bearer ${RENDER_API_KEY}`, Accept: 'application/json' };
-    const list = await (await fetch(RB + '/services?limit=100', { headers: h })).json();
-    if (!Array.isArray(list)) throw new Error(list?.message || 'Render API error');
-    const out = await Promise.all(list.map(async ({ service: s }) => {
-      let deploy = null;
-      try {
-        const d = await (await fetch(`${RB}/services/${s.id}/deploys?limit=1`, { headers: h })).json();
-        deploy = d?.[0]?.deploy || null;
-      } catch {}
-      return {
-        id: s.id, name: s.name, type: s.type, suspended: s.suspended, url: s.serviceDetails?.url || null,
-        plan: s.serviceDetails?.plan || null, region: s.serviceDetails?.region || null, updatedAt: s.updatedAt,
-        dashboard: s.dashboardUrl, deploy: deploy && { status: deploy.status, finishedAt: deploy.finishedAt, commit: deploy.commit?.message?.split('\n')[0] || null },
-      };
-    }));
-    // auto-add every Render web service to the uptime monitor
-    for (const s of out) if (s.url) await pool.query(`INSERT INTO monitors(name, url, kind, render_id) VALUES ($1,$2,'client',$3) ON CONFLICT (url) DO UPDATE SET render_id=$3`, [s.name, s.url, s.id]);
-    renderCache = { at: Date.now(), data: out };
+    if (!rc) return null;
+    const out = await rc.services();
+    // auto-add every Render web service to the uptime monitor (only when the list changed)
+    const sig = out.map((s) => s.id + s.url).join('|');
+    if (sig !== lastLinked) {
+      for (const s of out) if (s.url) await pool.query(`INSERT INTO monitors(name, url, kind, render_id) VALUES ($1,$2,'client',$3) ON CONFLICT (url) DO UPDATE SET render_id=$3`, [s.name, s.url, s.id]);
+      lastLinked = sig;
+    }
     return out;
   }
 
@@ -136,7 +125,7 @@ export async function setupOps(app, pool, { APP_TZ = 'Asia/Karachi', RENDER_API_
     try {
       const ctl = new AbortController();
       const timer = setTimeout(() => ctl.abort(), 60000); // free Render apps can take ~50s to wake up
-      const r = await fetch(m.url, { signal: ctl.signal, redirect: 'follow' });
+      const r = await fetch(m.url, { signal: ctl.signal, redirect: 'follow', headers: { 'user-agent': 'PokitBio-Monitor' } });
       clearTimeout(timer);
       status = r.status;
     } catch (e) { err = e.name === 'AbortError' ? 'timeout (60s)' : e.message; }
@@ -148,16 +137,17 @@ export async function setupOps(app, pool, { APP_TZ = 'Asia/Karachi', RENDER_API_
   }
   async function checkAll() {
     const ms = await all(`SELECT * FROM monitors WHERE active`);
+    if (rc) await renderServices().catch(() => {}); // one shared read before checking
     await Promise.all(ms.map((m) => check(m).catch(() => {})));
   }
   setTimeout(() => checkAll().catch(() => {}), 15000);
   setInterval(() => checkAll().catch(() => {}), Math.max(5, +MONITOR_INTERVAL_MIN) * 60000);
   // keep this app awake (free Render sleeps after 15 min)
-  if (SELF_URL) setInterval(() => { logPing(SELF_URL); fetch(SELF_URL.replace(/\/$/, '') + '/healthz').catch(() => {}); }, 10 * 60000);
+  if (SELF_URL) setInterval(() => { logPing(SELF_URL); fetch(SELF_URL.replace(/\/$/, '') + '/healthz', { headers: { 'user-agent': 'PokitBio-Monitor' } }).catch(() => {}); }, 10 * 60000);
 
   app.get('/api/monitors', wrap(async (_req, res) => {
     let render = null, renderError = null;
-    try { render = await renderServices(); } catch (e) { renderError = e.message; }
+    try { render = await renderServices(); } catch (e) { renderError = e.rate ? `Render asked the app to slow down — trying again in about ${rc.waitingMin()} min` : e.message; }
     res.json({ monitors: await all(`SELECT * FROM monitors ORDER BY active DESC, kind, name`), render, renderError, renderConnected: !!RENDER_API_KEY, intervalMin: +MONITOR_INTERVAL_MIN });
   }));
   app.post('/api/monitors', wrap(async (req, res) => {

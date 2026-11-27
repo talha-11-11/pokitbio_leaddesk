@@ -296,6 +296,18 @@
   @media (max-width: 860px) { .reptypes { grid-template-columns: 1fr 1fr; } .reptype span { display: none; } .seg2 { width: 100%; } .seg2 button { flex: 1; padding: 7px 4px; } #rPdf { width: 100%; justify-content: center; margin-left: 0 !important; } }
 
   /* app usage */
+  .ucards { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 10px; }
+  .ucard { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; cursor: pointer; background: #fff; display: grid; gap: 6px; }
+  .ucard:hover { border-color: #B9C7DD; background: #FCFDFF; }
+  .ucard .uh { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; }
+  .ucard .uh .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ufig { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 6px 0 8px; border-bottom: 1px solid var(--line-2); }
+  .ufig .k, .ucard .k2 { font-size: 11.5px; color: var(--muted); }
+  .ufig .v { font-size: 19px; font-weight: 600; color: var(--navy); line-height: 1.25; }
+  .ufig .nt { font-size: 11px; color: var(--faint); }
+  .spark.big { height: 36px; min-width: 0; width: 100%; }
+  .tlbar.sm { height: 10px; }
+  .ucard .axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--faint); margin-top: -2px; }
   table.usage td { padding: 9px 12px; }
   .spark { display: flex; align-items: flex-end; gap: 2px; height: 30px; min-width: 150px; }
   .spark i { flex: 1; background: #B8CBEA; border-radius: 2px 2px 0 0; min-height: 0; }

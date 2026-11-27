@@ -11,6 +11,7 @@ import { setupProjects } from './projects.js';
 import { setupPayoneer } from './payoneer.js';
 import { setupReminders } from './reminders.js';
 import { setupUsage } from './usage.js';
+import { setupBeacon } from './beacon.js';
 
 pg.types.setTypeParser(1082, (v) => v); // DATE columns come back as plain 'YYYY-MM-DD'
 
@@ -236,6 +237,9 @@ app.post('/webhook', async (req, res) => {
 app.get('/privacy', (_req, res) => res.type('html').send(`<h1>PokitBio Lead Desk — Privacy</h1>
 <p>Messages sent to the PokitBio Facebook page and Instagram account are stored privately so our team can reply and follow up.
 We do not sell or share this data. To delete your data, email talha@pokitbio.com.</p>`));
+
+// --- free live usage tracking (public endpoint, checked by its own key) ---
+const beacon = await setupBeacon(app, pool, { APP_TZ });
 
 // --- auth for dashboard API ---
 app.use('/api', (req, res, next) => {
@@ -463,7 +467,7 @@ await setupOps(app, pool, { APP_TZ, RENDER_API_KEY: process.env.RENDER_API_KEY, 
 const payoneer = await setupPayoneer(app, pool, { APP_TZ });
 await setupProjects(app, pool, { APP_TZ, payoneer });
 await setupReminders(app, pool, { APP_TZ });
-await setupUsage(app, pool, { APP_TZ, RENDER_API_KEY: process.env.RENDER_API_KEY, SELF_URL: process.env.RENDER_EXTERNAL_URL || process.env.SELF_URL });
+await setupUsage(app, pool, { beacon, APP_TZ, RENDER_API_KEY: process.env.RENDER_API_KEY, SELF_URL: process.env.RENDER_EXTERNAL_URL || process.env.SELF_URL });
 
 // one-time pass over messages already stored (only fills empty fields)
 (async () => {

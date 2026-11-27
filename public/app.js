@@ -40,6 +40,7 @@ const cur = (amount, c) => (c === 'PKR' ? rs(amount) : `${{ USD: '$', EUR: '€'
 function rel(iso) {
   if (!iso) return '';
   const d = Math.round((new Date(iso) - Date.now()) / 6e4), a = Math.abs(d);
+  if (a < 1) return 'just now';
   if (a < 60) return d <= 0 ? `${a}m ago` : `in ${a}m`;
   if (a < 1440) return d <= 0 ? `${Math.round(a / 60)}h ago` : `in ${Math.round(a / 60)}h`;
   return d <= 0 ? `${Math.round(a / 1440)}d ago` : `in ${Math.round(a / 1440)}d`;
@@ -1518,29 +1519,37 @@ async function loadUsage(refresh) {
   box.innerHTML = `<div class="card"><div class="ch">How often each app is opened</div><div class="empty">Reading usage from Render…</div></div>`;
   let u;
   try { u = await api(`/api/render/usage?days=${S.usageDays}${refresh ? '&refresh=1' : ''}`); } catch (e) { box.innerHTML = `<div class="card cb bad">${esc(e.message)}</div>`; return; }
-  if (!u.connected) { box.innerHTML = `<div class="card cb"><b>See how often each app is opened and how long it stays awake</b><div class="sub" style="margin-top:4px">Add <code>RENDER_API_KEY</code> in Render → Environment (Render → Account settings → API keys). The app then reads each service's visits and running time from Render every day.</div></div>`; return; }
+  if (!u.connected) { box.innerHTML = `<div class="card cb"><b>See how often each app is opened and how long it stays awake</b><div class="sub" style="margin-top:4px">Free option: add live tracking to your apps (a few lines each). Or add <code>RENDER_API_KEY</code> in Render → Environment to read hourly numbers from Render.</div><div style="margin-top:8px"><button class="btn sm" id="uLive">Add live tracking</button></div></div>`; $('#uLive').onclick = liveSetup; return; }
   S.usage = u;
-  const today = u.services.map((s) => s.days[s.days.length - 1]);
-  const tOpens = today.reduce((a, d) => a + d.opens, 0), tAwake = today.reduce((a, d) => a + d.awakeMin, 0);
   const hasAny = u.services.some((s) => s.days.some((d) => d.hasData));
-  box.innerHTML = `<div class="card"><div class="ch">How often each app is opened
-      <span class="r" style="display:flex;gap:6px;align-items:center"><span class="seg2">${[7, 14, 30].map((n) => `<button class="${S.usageDays === n ? 'on' : ''}" data-ud="${n}">${n} days</button>`).join('')}</span><button class="btn light sm" id="uRef">⟳</button></span></div>
+  const strip = (segs) => `<div class="tlbar sm">${(segs || []).map(([x, y]) => `<i style="left:${(x / 1440) * 100}%;width:${Math.max(0.5, ((y - x) / 1440) * 100)}%"></i>`).join('')}</div>`;
+  box.innerHTML = `<div class="card"><div class="ch">Usage of each app
+      <span class="r" style="display:flex;gap:6px;align-items:center"><span class="seg2">${[7, 14, 30].map((n) => `<button class="${S.usageDays === n ? 'on' : ''}" data-ud="${n}">${n} days</button>`).join('')}</span><button class="btn light sm" id="uLive">Live tracking</button>${u.renderConnected ? `<button class="btn light sm" id="uRef" title="Read fresh numbers from Render">⟳</button>` : ''}</span></div>
     <div class="cb">
+      ${u.waitingMin ? `<div class="sub" style="margin-bottom:8px">Render asked the app to slow down; it will read fresh numbers again in about ${u.waitingMin} min${hasAny ? '. Showing saved history meanwhile' : ''}.</div>` : ''}
       ${u.error ? `<div class="bad" style="margin-bottom:8px">Render: ${esc(u.error)}${hasAny ? ' — showing saved history' : ''} <button class="btn ghost sm" id="uDbg">details</button></div>` : ''}
-      <div class="figs">${figure('Opened today, all apps', tOpens.toLocaleString())}${figure('Awake today, all apps', fmtDur(tAwake))}${figure(`Opened in ${u.days} days`, u.services.reduce((a, s) => a + s.total.opens, 0).toLocaleString())}${figure('Apps', u.services.length)}</div>
-      ${hasAny ? `<div class="tscroll"><table class="usage">
-        <tr><th>App</th><th class="num">Opened today</th><th class="num">Awake today</th><th>Opened per day · last ${u.days} days</th><th class="num">Total</th><th class="num">Avg awake / day</th><th class="num">Woke up</th></tr>
-        ${u.services.map((s, i) => { const td = s.days[s.days.length - 1]; const max = Math.max(1, ...s.days.map((d) => d.opens));
-          return `<tr class="row" data-us="${i}"><td><div class="name">${esc(s.name)}</div><div class="sub">${esc((s.url || '').replace(/^https?:\/\//, ''))}</div></td>
-          <td class="num"><b>${td.opens}</b></td><td class="num">${fmtDur(td.awakeMin)}</td>
-          <td><div class="spark" title="${s.days.map((d) => `${fmtShort(d.day)}: ${d.opens}`).join('\n')}">${s.days.map((d, k) => `<i style="height:${d.opens ? Math.max(8, (d.opens / max) * 100) : 0}%" class="${k === s.days.length - 1 ? 'now' : ''}"></i>`).join('')}</div></td>
-          <td class="num">${s.total.opens.toLocaleString()}</td><td class="num">${fmtDur(s.total.awakeMin / u.days)}</td><td class="num">${s.total.wakes}×</td></tr>`; }).join('')}
-      </table></div>
-      <div class="sub" style="margin-top:8px">"Opened" counts visits (page loads and app requests), not counting this app's own checks. "Awake" is how long Render kept the app running; free apps sleep after 15 minutes without visits. Tap an app for its day-by-day timeline.${u.updatedAt ? ` Updated ${rel(u.updatedAt)}.` : ''}</div>`
-      : `<div class="empty">No usage data yet. Render's numbers appear here after the first read; history then builds up day by day.</div>`}
+      ${hasAny ? `<div class="ucards">${u.services.map((s, i) => {
+          const td = s.days[s.days.length - 1], yd = s.days[s.days.length - 2] || {};
+          const max = Math.max(1, ...s.days.map((d) => d.opens));
+          return `<div class="ucard" data-us="${i}" tabindex="0" role="button" aria-label="Usage of ${esc(s.name)}">
+            <div class="uh"><div style="min-width:0"><div class="name">${esc(s.name)}</div><div class="sub">${esc((s.url || '').replace(/^https?:\/\//, ''))}</div></div><div style="display:flex;gap:4px;flex-shrink:0">${s.live ? `<span class="badge ${s.live.awakeNow ? 'b-good' : 'b-mute'}" title="Live tracking">${s.live.awakeNow ? '● awake now' : 'asleep'}</span>` : ''}${s.plan ? `<span class="badge b-mute">${esc(s.plan)}</span>` : ''}</div></div>
+            ${s.live ? `<div class="sub" style="margin:-4px 0 6px">${s.live.lastView ? 'Last opened ' + rel(s.live.lastView) : 'Not opened yet since tracking started'}${!s.live.awakeNow && s.live.lastSeen ? ' · went to sleep ' + rel(s.live.lastSeen) : ''}</div>` : ''}
+            <div class="ufig">
+              <div><div class="k">Opened today</div><div class="v">${td.opens.toLocaleString()}</div><div class="nt">yesterday ${(yd.opens || 0).toLocaleString()}</div></div>
+              <div><div class="k">Awake today</div><div class="v">${fmtDur(td.awakeMin)}</div><div class="nt">yesterday ${fmtDur(yd.awakeMin || 0)}</div></div>
+              <div><div class="k">Woke up today</div><div class="v">${td.wakes}×</div><div class="nt">${s.total.wakes}× in ${u.days} days</div></div>
+            </div>
+            <div class="k2">Opened per day · ${u.days} days · ${s.total.opens.toLocaleString()} total</div>
+            <div class="spark big" title="${s.days.map((d) => `${fmtShort(d.day)}: ${d.opens} opens, ${fmtDur(d.awakeMin)} awake`).join('\n')}">${s.days.map((d, k) => `<i style="height:${d.opens ? Math.max(6, (d.opens / max) * 100) : 0}%" class="${k === s.days.length - 1 ? 'now' : ''}"></i>`).join('')}</div>
+            <div class="k2">Awake today</div>${strip(td.segments)}
+            <div class="axis"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span></span></div>
+          </div>`; }).join('')}</div>
+      <div class="sub" style="margin-top:10px">Apps marked <b>awake now / asleep</b> use live tracking: "opened" counts real page visits as they happen. Other apps use Render's numbers (all requests, minus this app's own checks), read every hour${u.updatedAt ? `; last read ${rel(u.updatedAt)}` : ''}. Free apps sleep after 15 minutes without visits. Tap an app for its day-by-day view.</div>`
+      : `<div class="empty">No usage data yet. ${u.renderConnected ? "The app reads Render's numbers in the background (shortly after start, then every hour) — check back in a few minutes. " : ''}Apps with live tracking show up the moment they start.</div>`}
     </div></div>`;
   $$('[data-ud]').forEach((b) => (b.onclick = () => { S.usageDays = +b.dataset.ud; loadUsage(); }));
-  $('#uRef').onclick = () => loadUsage(true);
+  if ($('#uRef')) $('#uRef').onclick = () => loadUsage(true);
+  $('#uLive').onclick = liveSetup;
   if ($('#uDbg')) $('#uDbg').onclick = async () => {
     const dbg = await api('/api/render/usage/debug').catch((e) => ({ error: e.message }));
     const txt = JSON.stringify(dbg, null, 2);
@@ -1551,7 +1560,7 @@ async function loadUsage(refresh) {
     $('#mCancel').onclick = closeModal;
     $('#dbgCopy').onclick = async () => { try { await navigator.clipboard.writeText(txt); toast('Copied'); } catch { $('#modalRoot textarea').select(); toast('Select all and copy'); } };
   };
-  $$('[data-us]').forEach((tr) => (tr.onclick = () => usageDetail(u.services[+tr.dataset.us])));
+  $$('[data-us]').forEach((el) => { el.onclick = () => usageDetail(u.services[+el.dataset.us]); el.onkeydown = (e) => { if (e.key === 'Enter') usageDetail(u.services[+el.dataset.us]); }; });
 }
 function usageDetail(s) {
   const days = s.days, last7 = days.slice(-7).reverse();
@@ -1563,6 +1572,9 @@ function usageDetail(s) {
     <div class="chartbox" style="height:170px"><canvas id="cUseO" role="img" aria-label="Opens per day"></canvas></div>
     <div class="subhd">Hours awake per day</div>
     <div class="chartbox" style="height:130px"><canvas id="cUseA" role="img" aria-label="Hours awake per day"></canvas></div>
+    ${s.live ? `<div class="subhd">Opened today, by hour</div>
+    <div class="chartbox" style="height:120px"><canvas id="cUseH" role="img" aria-label="Opens today by hour"></canvas></div>
+    ${s.live.topPages?.length ? `<div class="subhd">Most opened pages · ${days.length} days</div><div class="list">${s.live.topPages.map((p) => `<div class="li"><div class="grow t" style="font-family:ui-monospace,monospace;font-size:13px">${esc(p.path)}</div><b>${p.n.toLocaleString()}</b></div>`).join('')}</div>` : ''}` : ''}
     <div class="subhd">When it was awake · last 7 days</div>
     <div class="tl">
       <div class="tlrow tlhead"><span></span><div class="tlaxis">${[0, 6, 12, 18, 24].map((h) => `<span style="left:${(h / 24) * 100}%">${h === 24 ? '' : h === 0 ? '12am' : h === 12 ? '12pm' : h < 12 ? h + 'am' : h - 12 + 'pm'}</span>`).join('')}</div><span></span></div>
@@ -1579,6 +1591,63 @@ function usageDetail(s) {
   chart($('#cUseA'), { type: 'bar', data: { labels, datasets: [{ label: 'Awake', data: days.map((d) => +(d.awakeMin / 60).toFixed(2)), backgroundColor: '#0A2A5E', maxBarThickness: 18, ...colEnd }] },
     options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { ...tipStyle, callbacks: { title: (x) => fmtDate(days[x[0].dataIndex].day), label: (x) => ` Awake ${fmtDur(days[x.dataIndex].awakeMin)}${days[x.dataIndex].wakes ? ` · woke up ${days[x.dataIndex].wakes}×` : ''}` } } },
       scales: baseScales((v) => v + 'h') } });
+  const hrs = days[days.length - 1].hours;
+  if (s.live && hrs && $('#cUseH')) {
+    const hl = Array.from({ length: 24 }, (_, h) => (h === 0 ? '12am' : h === 12 ? '12pm' : h < 12 ? h + 'am' : h - 12 + 'pm'));
+    chart($('#cUseH'), { type: 'bar', data: { labels: hl, datasets: [{ label: 'Opened', data: hrs, backgroundColor: '#FF7878', maxBarThickness: 14, ...colEnd }] },
+      options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { ...tipStyle, callbacks: { label: (x) => ` Opened ${x.raw} time${x.raw === 1 ? '' : 's'}` } } },
+        scales: { ...baseScales((v) => axisK(v)), x: { ...baseScales().x, ticks: { ...(baseScales().x?.ticks || {}), maxRotation: 0, autoSkip: true, maxTicksLimit: 8 } } } } });
+  }
+}
+
+// live tracking: snippets to paste into each app
+async function liveSetup() {
+  const d = await api('/api/beacon/info');
+  const node = `// PokitBio usage tracking — paste after "const app = express()"
+const PB = (e, p = '') => fetch('${d.endpoint}?k=${d.key}&e=' + e
+  + '&app=' + encodeURIComponent(process.env.RENDER_SERVICE_NAME || 'my-app')
+  + '&u=' + encodeURIComponent(process.env.RENDER_EXTERNAL_URL || '')
+  + '&p=' + encodeURIComponent(p), { method: 'POST' }).catch(() => {});
+PB('start'); setInterval(() => PB('alive'), 5 * 60000).unref();
+app.use((req, res, next) => {
+  if (req.method === 'GET' && (req.get('accept') || '').includes('text/html')
+    && !/\.\w+$/.test(req.path) && !/PokitBio-Monitor|Render\/|bot|crawl|spider/i.test(req.get('user-agent') || '')) PB('view', req.path);
+  next();
+});`;
+  const py = `# PokitBio usage tracking — paste after app = Flask(...) / at the top of a Streamlit script (needs: requests)
+import os, threading, requests
+def PB(e, p=''):
+    def go():
+        try: requests.post('${d.endpoint}', params={'k': '${d.key}', 'e': e, 'p': p,
+            'app': os.environ.get('RENDER_SERVICE_NAME', 'my-app'), 'u': os.environ.get('RENDER_EXTERNAL_URL', '')}, timeout=5)
+        except Exception: pass
+    threading.Thread(target=go, daemon=True).start()
+def _alive():
+    PB('alive'); t = threading.Timer(300, _alive); t.daemon = True; t.start()
+if not os.environ.get('PB_ON'):  # once per process (Streamlit re-runs the script)
+    os.environ['PB_ON'] = '1'; PB('start'); _t = threading.Timer(300, _alive); _t.daemon = True; _t.start()
+
+# Flask: count page visits (skip for Streamlit — start/alive above is enough there)
+@app.before_request
+def _pb_view():
+    from flask import request
+    if request.method == 'GET' and 'text/html' in request.headers.get('Accept', '') and '.' not in request.path.rsplit('/', 1)[-1]:
+        PB('view', request.path)`;
+  const html = `<!-- PokitBio usage tracking — for static sites (GitHub Pages etc.), paste before </body>; change my-site -->
+<script>navigator.sendBeacon('${d.endpoint}?k=${d.key}&e=view&app=my-site&u='+encodeURIComponent(location.origin)+'&p='+encodeURIComponent(location.pathname))</script>`;
+  const box = (id, title, note, code) => `<div class="subhd">${title}</div><div class="sub" style="margin-bottom:6px">${note}</div>
+    <textarea class="inp" id="${id}" rows="${Math.min(14, code.split('\n').length + 1)}" style="width:100%;font:12px ui-monospace,monospace" readonly>${esc(code)}</textarea>
+    <div style="margin:6px 0 4px"><button class="btn light sm" data-copy="${id}">Copy</button></div>`;
+  $('#modalRoot').innerHTML = `<div class="modal"><div class="box" style="width:min(860px,100%)"><h2>Live tracking for your apps</h2>
+    <div class="sub">Free, and no Render plan needed. Each app tells this engine when it wakes up, every 5 minutes while it runs, and on each page visit. The app name comes from Render automatically, so the same code works in every app. Paste it once, push, and the app shows up here as soon as it starts.</div>
+    ${d.apps.length ? `<div class="subhd">Reporting now (${d.apps.length})</div><div class="list">${d.apps.map((a) => `<div class="li"><div class="grow"><div class="t">${esc(a.app)}</div><div class="sub">${a.lastView ? 'last opened ' + rel(a.lastView) : 'no visits yet'}</div></div><span class="badge ${a.awakeNow ? 'b-good' : 'b-mute'}">${a.awakeNow ? 'awake' : 'asleep'}</span></div>`).join('')}</div>` : ''}
+    ${box('snNode', 'Node / Express apps', 'Needs Node 18 or newer (built-in fetch). No packages to install.', node)}
+    ${box('snPy', 'Python apps (Flask, FastAPI, Streamlit)', 'Uses the requests package. The page-visit part is for Flask; leave it out for other frameworks.', py)}
+    ${box('snHtml', 'Static websites', 'Counts visits only (a static site has no awake time).', html)}
+    <div class="sub">Keep the key private: it only lets someone add visit counts, but there is no reason to share it.</div>
+    <div class="mact"><button class="btn light" id="mCancel">Close</button></div></div></div>`;
+  $('#mCancel').onclick = closeModal;
+  $$('[data-copy]').forEach((b) => (b.onclick = async () => { const t = $('#' + b.dataset.copy); try { await navigator.clipboard.writeText(t.value); toast('Copied'); } catch { t.select(); toast('Select all and copy'); } }));
 }
 
 // ------------------------------------------------------------ SETTINGS
